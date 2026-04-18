@@ -8,22 +8,39 @@ import threading
 import time
 
 # ─── Конфиг ─────────────────────────────────────────────────────
-BOT_TOKEN      = "8346191757:AAF0zkByozV1U5w6SsFI4fZxhPX9YyKNqrg"       # Токен от @BotFather
-CRYPTO_TOKEN   = "552018:AAmEzVekZI0E1Qcpi0ccOxbkOMk01J2Qs2n"    # Токен от @CryptoBot → /pay → Create App
-ADMIN_ID       = 8118184388              # Ваш Telegram ID
-CRYPTO_BOT_URL = "https://pay.crypt.bot/api"   # mainnet @CryptoBot
-# CRYPTO_BOT_URL = "https://testnet-pay.crypt.bot/api"  # testnet @CryptoTestnetBot
+BOT_TOKEN      = "8346191757:AAF0zkByozV1U5w6SsFI4fZxhPX9YyKNqrg"
+CRYPTO_TOKEN   = "552018:AAmEzVekZI0E1Qcpi0ccOxbkOMk01J2Qs2n"
+ADMIN_ID       = 123456789
+CRYPTO_BOT_URL = "https://pay.crypt.bot/api"
+# CRYPTO_BOT_URL = "https://testnet-pay.crypt.bot/api"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
+# ─── Custom Emoji IDs ────────────────────────────────────────────
+# Замените на свои ID (берутся через @stickers или инспектор клиента)
+EMOJI_AUTOREG  = "5357069174512303778"   # 🤖
+EMOJI_LIVE     = "5357069174512303778"   # 👤
+EMOJI_JSON     = "5357069174512303778"   # 📱
+EMOJI_STREAM2  = "5357069174512303778"   # ⚡
+EMOJI_TOPUP    = "5357069174512303778"   # 💳
+EMOJI_ORDERS   = "5357069174512303778"   # 📦
+EMOJI_INSTRUCT = "5357069174512303778"   # 📖
+EMOJI_RULES    = "5357069174512303778"   # 📜
+EMOJI_REF      = "5357069174512303778"   # 👥
+EMOJI_BACK     = "5357069174512303778"   # ◀️
+EMOJI_PAY      = "5357069174512303778"   # 💳
+EMOJI_CHECK    = "5357069174512303778"   # 🔄
+EMOJI_CONFIRM  = "5357069174512303778"   # ✅
+EMOJI_CANCEL   = "5357069174512303778"   # ❌
+EMOJI_MANUAL   = "5357069174512303778"   # ✏️
+
 # ─── Crypto Bot API ─────────────────────────────────────────────
 class CryptoPayAPI:
-    def __init__(self, token: str, base_url: str):
-        self.token    = token
+    def __init__(self, token, base_url):
         self.base_url = base_url.rstrip("/")
         self.headers  = {"Crypto-Pay-API-Token": token}
 
-    def _get(self, method: str, **params) -> dict:
+    def _get(self, method, **params):
         r    = requests.get(f"{self.base_url}/{method}",
                             headers=self.headers, params=params, timeout=10)
         data = r.json()
@@ -31,59 +48,28 @@ class CryptoPayAPI:
             raise Exception(data.get("error", {}).get("name", "API error"))
         return data["result"]
 
-    def get_me(self) -> dict:
+    def get_me(self):
         return self._get("getMe")
 
-    def create_invoice(self, asset: str, amount: float,
-                       description: str = "", payload: str = "",
-                       expires_in: int = 1800) -> dict:
-        return self._get(
-            "createInvoice",
-            asset=asset,
-            amount=f"{amount:.2f}",
-            description=description[:1024],
-            payload=payload[:4096],
-            expires_in=expires_in,
-        )
+    def create_invoice(self, asset, amount, description="", payload="", expires_in=1800):
+        return self._get("createInvoice",
+                         asset=asset, amount=f"{amount:.2f}",
+                         description=description[:1024],
+                         payload=payload[:4096],
+                         expires_in=expires_in)
 
-    def get_invoices(self, invoice_ids: str = None, status: str = None) -> list:
-        params = {"count": 100}
-        if invoice_ids: params["invoice_ids"] = invoice_ids
-        if status:      params["status"]       = status
-        return self._get("getInvoices", **params).get("items", [])
-
-    def check_invoice(self, invoice_id: int) -> dict | None:
-        items = self.get_invoices(invoice_ids=str(invoice_id))
+    def check_invoice(self, invoice_id):
+        items = self._get("getInvoices", invoice_ids=str(invoice_id), count=1).get("items", [])
         return items[0] if items else None
 
 crypto = CryptoPayAPI(CRYPTO_TOKEN, CRYPTO_BOT_URL)
 
 # ─── Товары ─────────────────────────────────────────────────────
 PRODUCTS = {
-    "autoreg": {
-        "name": "🤖 Авторег без 2FA",
-        "price": 4.0,
-        "stock": 136,
-        "desc": "Авторег аккаунты без 2FA, фарм 7+ дней",
-    },
-    "live": {
-        "name": "👤 Живые аккаунты",
-        "price": 7.0,
-        "stock": 256,
-        "desc": "Живые аккаунты с историей активности 30+ дней",
-    },
-    "json": {
-        "name": "📱 JSON Android (эмулятор)",
-        "price": 4.7,
-        "stock": 125,
-        "desc": "JSON-файлы для LDPlayer, BlueStacks, MeMu",
-    },
-    "stream2": {
-        "name": "⚡ Живые | Поток 2",
-        "price": 7.5,
-        "stock": 0,
-        "desc": "Премиум живые аккаунты второго потока",
-    },
+    "autoreg": {"name": "Авторег без 2FA",       "price": 4.0,  "stock": 136, "desc": "Авторег аккаунты без 2FA, фарм 7+ дней"},
+    "live":    {"name": "Живые аккаунты",         "price": 7.0,  "stock": 256, "desc": "Живые аккаунты с историей 30+ дней"},
+    "json":    {"name": "JSON Android (эмулятор)","price": 4.7,  "stock": 125, "desc": "JSON-файлы для LDPlayer, BlueStacks, MeMu"},
+    "stream2": {"name": "Живые | Поток 2",        "price": 7.5,  "stock": 0,   "desc": "Премиум живые аккаунты второго потока"},
 }
 
 MIN_ORDER_USD = 100
@@ -105,12 +91,11 @@ def save_json(path, data):
 
 def get_user(uid):
     db  = load_json(DB_FILE)
-    uid = str(uid)
-    if uid not in db:
-        db[uid] = {"balance": 0.0, "orders": [], "ref": None,
-                   "ref_count": 0, "ref_earned": 0.0}
+    key = str(uid)
+    if key not in db:
+        db[key] = {"balance": 0.0, "orders": [], "ref": None, "ref_count": 0, "ref_earned": 0.0}
         save_json(DB_FILE, db)
-    return db[uid]
+    return db[key]
 
 def save_user(uid, data):
     db = load_json(DB_FILE)
@@ -122,45 +107,52 @@ def save_invoice(inv_id, meta):
     db[str(inv_id)] = meta
     save_json(INVOICES_FILE, db)
 
-def get_inv_meta(inv_id) -> dict | None:
+def get_inv_meta(inv_id):
     return load_json(INVOICES_FILE).get(str(inv_id))
 
 def ceil_div(a, b):
     return (a + b - 1) // b
 
+def btn(text, cb=None, url=None, emoji_id=None):
+    """Хелпер создания кнопки с кастомным эмодзи."""
+    kwargs = {}
+    if cb:        kwargs["callback_data"]       = cb
+    if url:       kwargs["url"]                 = url
+    if emoji_id:  kwargs["icon_custom_emoji_id"] = emoji_id
+    return types.InlineKeyboardButton(text=text, **kwargs)
+
 # ─── Клавиатуры ─────────────────────────────────────────────────
 def main_kb():
     kb = types.InlineKeyboardMarkup(row_width=2)
-    kb.add(
-        types.InlineKeyboardButton("🤖 Авторег без 2FA  •  4$",   callback_data="buy_autoreg"),
-        types.InlineKeyboardButton("👤 Живые аккаунты  •  7$",    callback_data="buy_live"),
+    kb.row(
+        btn("Авторег без 2FA  •  4$",   cb="buy_autoreg",  emoji_id=EMOJI_AUTOREG),
+        btn("Живые аккаунты  •  7$",    cb="buy_live",     emoji_id=EMOJI_LIVE),
     )
-    kb.add(
-        types.InlineKeyboardButton("📱 JSON Android  •  4.7$",    callback_data="buy_json"),
-        types.InlineKeyboardButton("⚡ Живые | Поток 2  •  7.5$", callback_data="buy_stream2"),
+    kb.row(
+        btn("JSON Android  •  4.7$",    cb="buy_json",     emoji_id=EMOJI_JSON),
+        btn("Живые | Поток 2  •  7.5$", cb="buy_stream2",  emoji_id=EMOJI_STREAM2),
     )
-    kb.add(
-        types.InlineKeyboardButton("💳 Пополнить баланс",         callback_data="topup"),
-        types.InlineKeyboardButton("📦 Мои заказы",               callback_data="my_orders"),
+    kb.row(
+        btn("Пополнить баланс",         cb="topup",        emoji_id=EMOJI_TOPUP),
+        btn("Мои заказы",               cb="my_orders",    emoji_id=EMOJI_ORDERS),
     )
-    kb.add(
-        types.InlineKeyboardButton("📖 Инструкция",               callback_data="instruction"),
-        types.InlineKeyboardButton("📜 Правила",                  callback_data="rules"),
+    kb.row(
+        btn("Инструкция",               cb="instruction",  emoji_id=EMOJI_INSTRUCT),
+        btn("Правила",                  cb="rules",        emoji_id=EMOJI_RULES),
     )
-    kb.add(
-        types.InlineKeyboardButton("👥 Реферальная программа",    callback_data="referral"),
+    kb.row(
+        btn("Реферальная программа",    cb="referral",     emoji_id=EMOJI_REF),
     )
     return kb
 
 def back_kb():
     kb = types.InlineKeyboardMarkup()
-    kb.add(types.InlineKeyboardButton("◀️ Назад в меню", callback_data="main_menu"))
+    kb.add(btn("Назад в меню", cb="main_menu", emoji_id=EMOJI_BACK))
     return kb
 
 def main_text(uid):
     u = get_user(uid)
     return (
-        f"🏪 <b>АККАУНТ-ШОП</b>\n"
         f"{'─'*28}\n"
         f"💰 Баланс: <b>${u['balance']:.2f}</b>   📦 Заказов: <b>{len(u['orders'])}</b>\n"
         f"{'─'*28}\n\n"
@@ -179,7 +171,7 @@ def send_main(uid, cid, mid=None):
     else:
         bot.send_message(cid, t, parse_mode="HTML", reply_markup=k)
 
-# ─── Статические тексты ─────────────────────────────────────────
+# ─── Тексты ─────────────────────────────────────────────────────
 RULES_TEXT = """📜 <b>ПРАВИЛА МАГАЗИНА</b>
 
 <b>1. Общие положения</b>
@@ -190,17 +182,17 @@ RULES_TEXT = """📜 <b>ПРАВИЛА МАГАЗИНА</b>
 • 🤖 Авторег без 2FA — <b>$4/шт</b> (фарм 7+ дней)
 • 👤 Живые аккаунты — <b>$7/шт</b> (активность 30+ дней)
 • 📱 JSON Android — <b>$4.7/шт</b> (LDPlayer / BlueStacks / MeMu)
-• ⚡ Живые | Поток 2 — <b>$7.5/шт</b> (премиум, расширенная история)
+• ⚡ Живые | Поток 2 — <b>$7.5/шт</b> (премиум)
 
 <b>3. Гарантия и замены</b>
 • Гарантия <b>24 часа</b> с момента выдачи
-• Замена производится если аккаунт не работает при <b>первой</b> проверке
-• Замена НЕ производится при изменении данных, нарушении правил платформы или истечении 24ч
+• Замена если аккаунт не работает при первой проверке
+• Замена НЕ производится при: изменении данных, нарушении правил платформы, истечении 24ч
 
 <b>4. Оплата</b>
 • Только криптовалюта через @CryptoBot: USDT, TON, BTC, ETH
 • После создания счёта — <b>30 минут</b> на оплату
-• Возврат средств после выдачи товара — <b>невозможен</b>
+• Возврат после выдачи товара — <b>невозможен</b>
 
 <b>5. Запрещено</b>
 • Чарджбэк / оспаривание платежей
@@ -216,10 +208,9 @@ INSTRUCTION_TEXT = """📖 <b>ИНСТРУКЦИЯ</b>
 <b>Шаг 2.</b> Укажите количество аккаунтов
 — Минимальный заказ: <b>$100</b>
 
-<b>Шаг 3.</b> Бот создаст счёт через @CryptoBot автоматически
-— Нажмите кнопку «💳 Оплатить»
-— Оплатите в USDT / TON / BTC / ETH
-— После оплаты нажмите «🔄 Проверить оплату»
+<b>Шаг 3.</b> Нажмите <b>«💳 Оплатить»</b>
+— Оплатите в @CryptoBot (USDT / TON / BTC / ETH)
+— Оплата фиксируется <b>автоматически</b>
 
 <b>Шаг 4.</b> Аккаунты придут в течение нескольких минут
 
@@ -229,7 +220,7 @@ INSTRUCTION_TEXT = """📖 <b>ИНСТРУКЦИЯ</b>
 📱 JSON: готовый <code>.json</code> файл
 ⚡ Поток 2: <code>login:password:cookies</code>
 
-📦 Статус заказа — раздел «Мои заказы»
+📦 Статус — раздел «Мои заказы»
 ❓ Поддержка: @support"""
 
 REFERRAL_TEXT = """👥 <b>РЕФЕРАЛЬНАЯ ПРОГРАММА</b>
@@ -266,11 +257,9 @@ def on_cb(call):
     data = call.data
     bot.answer_callback_query(call.id)
 
-    # Главное меню
     if data == "main_menu":
         send_main(uid, cid, mid)
 
-    # ── Выбор товара ──────────────────────────────────────────
     elif data.startswith("buy_"):
         key = data[4:]
         p   = PRODUCTS.get(key)
@@ -278,7 +267,7 @@ def on_cb(call):
 
         if p["stock"] == 0:
             kb = types.InlineKeyboardMarkup()
-            kb.add(types.InlineKeyboardButton("◀️ Назад", callback_data="main_menu"))
+            kb.add(btn("Назад", cb="main_menu", emoji_id=EMOJI_BACK))
             bot.edit_message_text(
                 f"❌ <b>Нет в наличии</b>\n\n{p['name']} — временно недоступен.",
                 cid, mid, parse_mode="HTML", reply_markup=kb
@@ -291,16 +280,14 @@ def on_cb(call):
         for mult in [1, 2, 5, 10]:
             q = min_qty * mult
             if q <= p["stock"]:
-                btns.append(types.InlineKeyboardButton(
-                    f"{q} шт → ${q * p['price']:.0f}",
-                    callback_data=f"order_{key}_{q}"
-                ))
+                btns.append(btn(f"{q} шт → ${q * p['price']:.0f}",
+                                cb=f"order_{key}_{q}", emoji_id=EMOJI_CONFIRM))
         if btns: kb.add(*btns[:4])
-        kb.add(types.InlineKeyboardButton("✏️ Ввести вручную", callback_data=f"manual_{key}"))
-        kb.add(types.InlineKeyboardButton("◀️ Назад",          callback_data="main_menu"))
+        kb.add(btn("Ввести вручную", cb=f"manual_{key}", emoji_id=EMOJI_MANUAL))
+        kb.add(btn("Назад",          cb="main_menu",     emoji_id=EMOJI_BACK))
 
         bot.edit_message_text(
-            f"{p['name']}\n{'─'*28}\n"
+            f"<b>{p['name']}</b>\n{'─'*28}\n"
             f"💵 Цена: <b>${p['price']:.2f}/шт</b>\n"
             f"📦 На складе: <b>{p['stock']} шт</b>\n"
             f"🛒 Мин. заказ: <b>${MIN_ORDER_USD}</b>\n\n"
@@ -308,7 +295,6 @@ def on_cb(call):
             cid, mid, parse_mode="HTML", reply_markup=kb
         )
 
-    # ── Ввод вручную ──────────────────────────────────────────
     elif data.startswith("manual_"):
         key     = data[7:]
         p       = PRODUCTS[key]
@@ -321,39 +307,36 @@ def on_cb(call):
         )
         bot.register_next_step_handler(m, step_qty, key, cid)
 
-    # ── Подтверждение ─────────────────────────────────────────
     elif data.startswith("order_"):
         _, key, qty_s = data.split("_", 2)
         qty = int(qty_s)
         p   = PRODUCTS[key]
         kb  = types.InlineKeyboardMarkup()
         kb.add(
-            types.InlineKeyboardButton("✅ Создать счёт", callback_data=f"pay_{key}_{qty}"),
-            types.InlineKeyboardButton("❌ Отмена",       callback_data="main_menu"),
+            btn("Создать счёт", cb=f"pay_{key}_{qty}", emoji_id=EMOJI_CONFIRM),
+            btn("Отмена",       cb="main_menu",        emoji_id=EMOJI_CANCEL),
         )
         bot.edit_message_text(
             f"🛒 <b>ПОДТВЕРЖДЕНИЕ</b>\n{'─'*28}\n"
-            f"Товар: {p['name']}\n"
+            f"Товар: <b>{p['name']}</b>\n"
             f"Кол-во: <b>{qty} шт</b>\n"
             f"Цена: <b>${p['price']:.2f}/шт</b>\n{'─'*28}\n"
             f"💰 Итого: <b>${qty * p['price']:.2f} {ASSET}</b>",
             cid, mid, parse_mode="HTML", reply_markup=kb
         )
 
-    # ── Создать инвойс ────────────────────────────────────────
     elif data.startswith("pay_"):
         _, key, qty_s = data.split("_", 2)
-        qty   = int(qty_s)
-        p     = PRODUCTS[key]
-        total = qty * p["price"]
+        qty      = int(qty_s)
+        p        = PRODUCTS[key]
+        total    = qty * p["price"]
         order_id = f"ORD-{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
         bot.edit_message_text("⏳ Создаю счёт...", cid, mid)
 
         try:
             invoice = crypto.create_invoice(
-                asset=ASSET,
-                amount=total,
+                asset=ASSET, amount=total,
                 description=f"{p['name']} × {qty} шт",
                 payload=f"{uid}:{key}:{qty}:{order_id}",
                 expires_in=1800,
@@ -368,13 +351,13 @@ def on_cb(call):
         inv_id  = invoice["invoice_id"]
         pay_url = invoice["pay_url"]
 
-        # Сохраняем
         save_invoice(inv_id, {
             "uid": str(uid), "key": key, "qty": qty, "total": total,
             "order_id": order_id, "cid": cid, "mid": mid,
             "status": "active", "type": "order",
             "created": datetime.now().isoformat()
         })
+
         user = get_user(uid)
         user["orders"].append({
             "id": order_id, "invoice_id": inv_id,
@@ -385,24 +368,23 @@ def on_cb(call):
         save_user(uid, user)
 
         kb = types.InlineKeyboardMarkup()
-        kb.add(types.InlineKeyboardButton("💳 Оплатить",        url=pay_url))
-        kb.add(types.InlineKeyboardButton("🔄 Проверить оплату", callback_data=f"check_{inv_id}"))
-        kb.add(types.InlineKeyboardButton("◀️ В меню",          callback_data="main_menu"))
+        kb.add(btn("Оплатить",       url=pay_url,             emoji_id=EMOJI_PAY))
+        kb.add(btn("Проверить оплату", cb=f"check_{inv_id}",  emoji_id=EMOJI_CHECK))
+        kb.add(btn("В меню",           cb="main_menu",        emoji_id=EMOJI_BACK))
 
         bot.edit_message_text(
             f"✅ <b>СЧЁТ СОЗДАН</b>\n{'─'*28}\n"
             f"🆔 Заказ: <code>{order_id}</code>\n"
             f"📋 {p['name']} × {qty} шт\n"
             f"💰 К оплате: <b>${total:.2f} {ASSET}</b>\n"
-            f"🔖 Invoice ID: <code>{inv_id}</code>\n{'─'*28}\n\n"
-            f"1️⃣ Нажмите <b>«💳 Оплатить»</b>\n"
+            f"🔖 Invoice: <code>{inv_id}</code>\n{'─'*28}\n\n"
+            f"1️⃣ Нажмите <b>«Оплатить»</b>\n"
             f"2️⃣ Оплатите через @CryptoBot\n"
-            f"3️⃣ Вернитесь и нажмите <b>«🔄 Проверить оплату»</b>\n\n"
+            f"⚡ Оплата фиксируется <b>автоматически</b>\n\n"
             f"⏰ Счёт действителен <b>30 минут</b>",
             cid, mid, parse_mode="HTML", reply_markup=kb
         )
 
-    # ── Проверка оплаты ───────────────────────────────────────
     elif data.startswith("check_"):
         inv_id = int(data[6:])
         meta   = get_inv_meta(inv_id)
@@ -412,68 +394,53 @@ def on_cb(call):
         if meta.get("status") == "paid":
             bot.answer_callback_query(call.id, "✅ Уже оплачен!", show_alert=True)
             return
-
-        bot.answer_callback_query(call.id, "⏳ Проверяю...", show_alert=False)
+        bot.answer_callback_query(call.id, "⏳ Проверяю...")
         try:
             inv = crypto.check_invoice(inv_id)
         except Exception as e:
             bot.answer_callback_query(call.id, f"Ошибка: {e}", show_alert=True)
             return
-
         status = inv.get("status") if inv else "not_found"
-
         if status == "paid":
             _on_paid(inv_id, meta, cid, mid)
         elif status == "expired":
-            bot.edit_message_text(
-                "❌ <b>Счёт истёк</b>\n\nПожалуйста, создайте новый заказ.",
-                cid, mid, parse_mode="HTML", reply_markup=back_kb()
-            )
+            bot.edit_message_text("❌ <b>Счёт истёк</b>\n\nСоздайте новый заказ.",
+                                  cid, mid, parse_mode="HTML", reply_markup=back_kb())
         else:
-            bot.answer_callback_query(call.id,
-                "⏳ Оплата ещё не поступила.\nПопробуйте после оплаты.",
-                show_alert=True
-            )
+            bot.answer_callback_query(call.id, "⏳ Оплата ещё не поступила", show_alert=True)
 
-    # ── Пополнение баланса ────────────────────────────────────
     elif data == "topup":
         kb = types.InlineKeyboardMarkup(row_width=3)
         kb.add(
-            types.InlineKeyboardButton("$50",   callback_data="topup_50"),
-            types.InlineKeyboardButton("$100",  callback_data="topup_100"),
-            types.InlineKeyboardButton("$200",  callback_data="topup_200"),
-            types.InlineKeyboardButton("$500",  callback_data="topup_500"),
-            types.InlineKeyboardButton("$1000", callback_data="topup_1000"),
+            btn("$50",   cb="topup_50",   emoji_id=EMOJI_TOPUP),
+            btn("$100",  cb="topup_100",  emoji_id=EMOJI_TOPUP),
+            btn("$200",  cb="topup_200",  emoji_id=EMOJI_TOPUP),
+            btn("$500",  cb="topup_500",  emoji_id=EMOJI_TOPUP),
+            btn("$1000", cb="topup_1000", emoji_id=EMOJI_TOPUP),
         )
-        kb.add(types.InlineKeyboardButton("✏️ Другая сумма", callback_data="topup_custom"))
-        kb.add(types.InlineKeyboardButton("◀️ Назад",        callback_data="main_menu"))
+        kb.add(btn("Другая сумма", cb="topup_custom", emoji_id=EMOJI_MANUAL))
+        kb.add(btn("Назад",        cb="main_menu",    emoji_id=EMOJI_BACK))
         bot.edit_message_text(
             f"💳 <b>ПОПОЛНЕНИЕ БАЛАНСА</b>\n{'─'*28}\n"
-            f"Оплата в {ASSET} через @CryptoBot\n\n"
-            f"Выберите сумму:",
+            f"Оплата в {ASSET} через @CryptoBot\n\nВыберите сумму:",
             cid, mid, parse_mode="HTML", reply_markup=kb
         )
 
     elif data.startswith("topup_"):
         val = data[6:]
         if val == "custom":
-            m = bot.edit_message_text(
-                "✏️ Введите сумму пополнения (мин. $10):",
-                cid, mid, reply_markup=back_kb()
-            )
+            m = bot.edit_message_text("✏️ Введите сумму пополнения (мин. $10):",
+                                      cid, mid, reply_markup=back_kb())
             bot.register_next_step_handler(m, step_topup, cid)
         else:
             _create_topup(uid, cid, mid, float(val))
 
-    # ── Мои заказы ───────────────────────────────────────────
     elif data == "my_orders":
         user   = get_user(uid)
         orders = user["orders"]
         if not orders:
-            bot.edit_message_text(
-                "📦 <b>Мои заказы</b>\n\nЗаказов пока нет.",
-                cid, mid, parse_mode="HTML", reply_markup=back_kb()
-            )
+            bot.edit_message_text("📦 <b>Мои заказы</b>\n\nЗаказов пока нет.",
+                                  cid, mid, parse_mode="HTML", reply_markup=back_kb())
             return
         text = f"📦 <b>МОИ ЗАКАЗЫ</b>\n{'─'*28}\n\n"
         for o in reversed(orders[-10:]):
@@ -493,9 +460,8 @@ def on_cb(call):
         bot.edit_message_text(RULES_TEXT, cid, mid, parse_mode="HTML", reply_markup=back_kb())
 
     elif data == "referral":
-        user     = get_user(uid)
-        username = bot.get_me().username
-        link     = f"https://t.me/{username}?start={uid}"
+        user = get_user(uid)
+        link = f"https://t.me/{bot.get_me().username}?start={uid}"
         text = (
             REFERRAL_TEXT +
             f"🔗 <b>Ваша ссылка:</b>\n<code>{link}</code>\n\n"
@@ -505,10 +471,11 @@ def on_cb(call):
         )
         bot.edit_message_text(text, cid, mid, parse_mode="HTML", reply_markup=back_kb())
 
-# ─── Событие оплаты ─────────────────────────────────────────────
-def _on_paid(inv_id: int, meta: dict, cid: int, mid: int):
-    # Помечаем инвойс как оплаченный
+# ─── Оплата подтверждена ────────────────────────────────────────
+def _on_paid(inv_id, meta, cid, mid):
     db = load_json(INVOICES_FILE)
+    if db.get(str(inv_id), {}).get("status") == "paid":
+        return  # уже обработан
     db[str(inv_id)]["status"] = "paid"
     save_json(INVOICES_FILE, db)
 
@@ -516,20 +483,22 @@ def _on_paid(inv_id: int, meta: dict, cid: int, mid: int):
     inv_type = meta.get("type", "order")
     total    = meta["total"]
 
-    # ── Пополнение баланса ──
     if inv_type == "topup":
         user = get_user(uid)
         user["balance"] = round(user["balance"] + total, 2)
         save_user(uid, user)
-        bot.edit_message_text(
+        text = (
             f"✅ <b>Баланс пополнен!</b>\n{'─'*28}\n"
             f"💰 +${total:.2f} {ASSET}\n"
-            f"💳 Ваш баланс: <b>${user['balance']:.2f}</b>",
-            cid, mid, parse_mode="HTML", reply_markup=back_kb()
+            f"💳 Ваш баланс: <b>${user['balance']:.2f}</b>"
         )
+        if mid:
+            try: bot.edit_message_text(text, cid, mid, parse_mode="HTML", reply_markup=back_kb())
+            except: bot.send_message(cid, text, parse_mode="HTML", reply_markup=back_kb())
+        else:
+            bot.send_message(cid, text, parse_mode="HTML", reply_markup=back_kb())
         return
 
-    # ── Заказ ──
     key      = meta["key"]
     qty      = meta["qty"]
     order_id = meta["order_id"]
@@ -544,42 +513,39 @@ def _on_paid(inv_id: int, meta: dict, cid: int, mid: int):
     # Реферальный бонус
     ref_uid = user.get("ref")
     if ref_uid:
-        ref_user = get_user(ref_uid)
-        bonus    = round(total * 0.05, 2)
-        ref_user["balance"]    = round(ref_user["balance"] + bonus, 2)
-        ref_user["ref_earned"] = round(ref_user.get("ref_earned", 0) + bonus, 2)
-        ref_user["ref_count"]  = ref_user.get("ref_count", 0) + 1
-        save_user(ref_uid, ref_user)
+        ru    = get_user(ref_uid)
+        bonus = round(total * 0.05, 2)
+        ru["balance"]    = round(ru["balance"] + bonus, 2)
+        ru["ref_earned"] = round(ru.get("ref_earned", 0) + bonus, 2)
+        ru["ref_count"]  = ru.get("ref_count", 0) + 1
+        save_user(ref_uid, ru)
         try:
             bot.send_message(int(ref_uid),
-                f"🎉 Реферальный бонус +${bonus:.2f}!\n"
-                f"💳 Баланс: <b>${ref_user['balance']:.2f}</b>",
-                parse_mode="HTML"
-            )
+                f"🎉 Реферальный бонус <b>+${bonus:.2f}</b>!\n"
+                f"💳 Баланс: <b>${ru['balance']:.2f}</b>", parse_mode="HTML")
         except: pass
 
-    # Пользователю
-    bot.edit_message_text(
+    text = (
         f"✅ <b>ОПЛАТА ПОДТВЕРЖДЕНА</b>\n{'─'*28}\n"
         f"🆔 Заказ: <code>{order_id}</code>\n"
         f"📋 {p.get('name', key)} × {qty} шт\n"
         f"💰 Оплачено: <b>${total:.2f} {ASSET}</b>\n{'─'*28}\n\n"
-        f"📦 Аккаунты будут выданы администратором в ближайшее время.",
-        cid, mid, parse_mode="HTML", reply_markup=back_kb()
+        f"📦 Аккаунты будут выданы в ближайшее время."
     )
+    if mid:
+        try: bot.edit_message_text(text, cid, mid, parse_mode="HTML", reply_markup=back_kb())
+        except: bot.send_message(int(uid), text, parse_mode="HTML", reply_markup=back_kb())
+    else:
+        bot.send_message(int(uid), text, parse_mode="HTML", reply_markup=back_kb())
 
-    # Администратору
     try:
-        bot.send_message(
-            ADMIN_ID,
+        bot.send_message(ADMIN_ID,
             f"🛒 <b>НОВЫЙ ОПЛАЧЕННЫЙ ЗАКАЗ</b>\n{'─'*28}\n"
             f"👤 UID: <code>{uid}</code>\n"
             f"🆔 {order_id}\n"
             f"📋 {p.get('name', key)} × {qty} шт\n"
             f"💰 ${total:.2f} {ASSET}\n"
-            f"🔖 Invoice: <code>{inv_id}</code>",
-            parse_mode="HTML"
-        )
+            f"🔖 Invoice: <code>{inv_id}</code>", parse_mode="HTML")
     except: pass
 
 # ─── Next step handlers ─────────────────────────────────────────
@@ -589,37 +555,29 @@ def step_qty(msg, key, cid):
     min_qty = ceil_div(MIN_ORDER_USD, int(p["price"]))
     try:
         qty = int(msg.text.strip())
-        if qty < min_qty or qty > p["stock"]:
-            raise ValueError
-    except ValueError:
-        m = bot.send_message(
-            cid,
-            f"❌ Введите число от {min_qty} до {p['stock']}:",
-            reply_markup=back_kb()
-        )
+        assert min_qty <= qty <= p["stock"]
+    except:
+        m = bot.send_message(cid, f"❌ Введите число от {min_qty} до {p['stock']}:", reply_markup=back_kb())
         bot.register_next_step_handler(m, step_qty, key, cid)
         return
-
     total = qty * p["price"]
-    kb    = types.InlineKeyboardMarkup()
+    kb = types.InlineKeyboardMarkup()
     kb.add(
-        types.InlineKeyboardButton("✅ Создать счёт", callback_data=f"pay_{key}_{qty}"),
-        types.InlineKeyboardButton("❌ Отмена",       callback_data="main_menu"),
+        btn("Создать счёт", cb=f"pay_{key}_{qty}", emoji_id=EMOJI_CONFIRM),
+        btn("Отмена",       cb="main_menu",        emoji_id=EMOJI_CANCEL),
     )
-    bot.send_message(
-        cid,
+    bot.send_message(cid,
         f"🛒 <b>ПОДТВЕРЖДЕНИЕ</b>\n{'─'*28}\n"
-        f"Товар: {p['name']}\n"
+        f"Товар: <b>{p['name']}</b>\n"
         f"Кол-во: <b>{qty} шт</b>\n"
         f"💰 Итого: <b>${total:.2f} {ASSET}</b>",
-        parse_mode="HTML", reply_markup=kb
-    )
+        parse_mode="HTML", reply_markup=kb)
 
 def step_topup(msg, cid):
     try:
         amount = float(msg.text.strip().replace("$", "").replace(",", "."))
         if amount < 10: raise ValueError
-    except ValueError:
+    except:
         m = bot.send_message(cid, "❌ Введите корректную сумму (мин. $10):", reply_markup=back_kb())
         bot.register_next_step_handler(m, step_topup, cid)
         return
@@ -628,14 +586,13 @@ def step_topup(msg, cid):
 def _create_topup(uid, cid, mid, amount):
     try:
         invoice = crypto.create_invoice(
-            asset=ASSET,
-            amount=amount,
+            asset=ASSET, amount=amount,
             description="Пополнение баланса",
             payload=f"topup:{uid}:{amount}",
             expires_in=1800,
         )
     except Exception as e:
-        text = f"❌ Ошибка CryptoBot API: <code>{e}</code>"
+        text = f"❌ Ошибка API: <code>{e}</code>"
         if mid: bot.edit_message_text(text, cid, mid, parse_mode="HTML", reply_markup=back_kb())
         else:   bot.send_message(cid, text, parse_mode="HTML", reply_markup=back_kb())
         return
@@ -645,32 +602,32 @@ def _create_topup(uid, cid, mid, amount):
 
     save_invoice(inv_id, {
         "uid": str(uid), "key": "topup", "qty": 0, "total": amount,
-        "order_id": f"TOP-{inv_id}", "cid": cid,
+        "order_id": f"TOP-{inv_id}", "cid": cid, "mid": mid,
         "status": "active", "type": "topup",
         "created": datetime.now().isoformat()
     })
 
     kb = types.InlineKeyboardMarkup()
-    kb.add(types.InlineKeyboardButton("💳 Оплатить",        url=pay_url))
-    kb.add(types.InlineKeyboardButton("🔄 Проверить оплату", callback_data=f"check_{inv_id}"))
-    kb.add(types.InlineKeyboardButton("◀️ В меню",          callback_data="main_menu"))
+    kb.add(btn("Оплатить",        url=pay_url,            emoji_id=EMOJI_PAY))
+    kb.add(btn("Проверить оплату", cb=f"check_{inv_id}",  emoji_id=EMOJI_CHECK))
+    kb.add(btn("В меню",           cb="main_menu",        emoji_id=EMOJI_BACK))
 
     text = (
         f"💳 <b>СЧЁТ НА ПОПОЛНЕНИЕ</b>\n{'─'*28}\n"
         f"💰 Сумма: <b>${amount:.2f} {ASSET}</b>\n"
         f"🔖 Invoice: <code>{inv_id}</code>\n{'─'*28}\n\n"
-        f"1️⃣ Нажмите <b>«💳 Оплатить»</b>\n"
+        f"1️⃣ Нажмите <b>«Оплатить»</b>\n"
         f"2️⃣ Оплатите через @CryptoBot\n"
-        f"3️⃣ Нажмите <b>«🔄 Проверить оплату»</b>\n\n"
+        f"⚡ Оплата фиксируется <b>автоматически</b>\n\n"
         f"⏰ Счёт действителен <b>30 минут</b>"
     )
     if mid: bot.edit_message_text(text, cid, mid, parse_mode="HTML", reply_markup=kb)
     else:   bot.send_message(cid, text, parse_mode="HTML", reply_markup=kb)
 
-# ─── Фоновый поллинг (авто-проверка оплат) ──────────────────────
+# ─── Фоновый поллинг каждые 2 сек ──────────────────────────────
 def poll_loop():
     while True:
-        time.sleep(30)
+        time.sleep(2)
         db = load_json(INVOICES_FILE)
         for inv_id_s, meta in list(db.items()):
             if meta.get("status") != "active":
@@ -678,10 +635,9 @@ def poll_loop():
             try:
                 inv = crypto.check_invoice(int(inv_id_s))
                 if inv and inv.get("status") == "paid":
-                    cid = meta.get("cid")
-                    if cid:
-                        _on_paid(int(inv_id_s), meta, int(cid), 0)
-                        # Отправим новым сообщением т.к. mid=0 невалиден
+                    cid = int(meta.get("cid", 0))
+                    mid = meta.get("mid", 0)
+                    _on_paid(int(inv_id_s), meta, cid, mid)
             except:
                 pass
 
@@ -689,7 +645,7 @@ def poll_loop():
 if __name__ == "__main__":
     try:
         me = crypto.get_me()
-        print(f"✅ CryptoBot API: {me.get('name')} подключён")
+        print(f"✅ CryptoBot API: {me.get('name')}")
     except Exception as e:
         print(f"⚠️  CryptoBot: {e}")
 
