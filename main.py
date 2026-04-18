@@ -8,9 +8,9 @@ import threading
 import time
 
 # ─── Конфиг ─────────────────────────────────────────────────────
-BOT_TOKEN      = "8346191757:AAF0zkByozV1U5w6SsFI4fZxhPX9YyKNqrg"
-CRYPTO_TOKEN   = "552018:AAmEzVekZI0E1Qcpi0ccOxbkOMk01J2Qs2n"
-ADMIN_ID       = 123456789
+BOT_TOKEN      = "8320997126:AAHyPYlfMWOOgYrTNPZMfF0GOrE_hh7gtcM"
+CRYPTO_TOKEN   = "562214:AABJIaVpSkcIR7FvY7B8Oh3TszuqCUgi0Tk"
+ADMIN_ID       = 8118184388
 CRYPTO_BOT_URL = "https://pay.crypt.bot/api"
 # CRYPTO_BOT_URL = "https://testnet-pay.crypt.bot/api"
 
