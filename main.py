@@ -154,13 +154,13 @@ def main_text(uid):
     u = get_user(uid)
     return (
         f"{'─'*28}\n"
-        f"💰 Баланс: <b>${u['balance']:.2f}</b>   📦 Заказов: <b>{len(u['orders'])}</b>\n"
+        f'<tg-emoji emoji-id="5258204546391351475">🎯</tg-emoji> Баланс: <b>${u['balance']:.2f}</b>   Заказов: <b>{len(u['orders'])}</b>\n'
         f"{'─'*28}\n\n"
-        f"📊 <b>Наличие на складе:</b>\n"
-        f"  🤖 Авторег без 2FA  — <b>136 шт</b>\n"
-        f"  👤 Живые аккаунты   — <b>256 шт</b>\n"
-        f"  📱 JSON Android     — <b>125 шт</b>\n"
-        f"  ⚡ Живые | Поток 2  — <b>❌ нет</b>\n\n"
+        f"<b>Наличие на складе:</b>\n"
+        f" Авторег без 2FA  — <b>136 шт</b>\n"
+        f" Живые аккаунты   — <b>256 шт</b>\n"
+        f" JSON Android     — <b>125 шт</b>\n"
+        f" Живые | Поток 2  — <b>❌ нет в наличии</b>\n\n"
         f"👇 Выберите товар или раздел:"
     )
 
@@ -172,17 +172,17 @@ def send_main(uid, cid, mid=None):
         bot.send_message(cid, t, parse_mode="HTML", reply_markup=k)
 
 # ─── Тексты ─────────────────────────────────────────────────────
-RULES_TEXT = """📜 <b>ПРАВИЛА МАГАЗИНА</b>
+RULES_TEXT = """<tg-emoji emoji-id="5258185631355378853">🎯</tg-emoji> <b>ПРАВИЛА МАГАЗИНА</b>
 
 <b>1. Общие положения</b>
 • Покупая товар, вы соглашаетесь с данными правилами
 • Минимальная сумма заказа: <b>$100</b>
 
 <b>2. Цены и товары</b>
-• 🤖 Авторег без 2FA — <b>$4/шт</b> (фарм 7+ дней)
-• 👤 Живые аккаунты — <b>$7/шт</b> (активность 30+ дней)
-• 📱 JSON Android — <b>$4.7/шт</b> (LDPlayer / BlueStacks / MeMu)
-• ⚡ Живые | Поток 2 — <b>$7.5/шт</b> (премиум)
+• Авторег без 2FA — <b>$4/шт</b> (фарм 7+ дней)
+• Живые аккаунты — <b>$7/шт</b> (активность 30+ дней)
+• JSON Android — <b>$4.7/шт</b> (LDPlayer / BlueStacks / MeMu)
+• Живые | Поток 2 — <b>$7.5/шт</b> (премиум)
 
 <b>3. Гарантия и замены</b>
 • Гарантия <b>24 часа</b> с момента выдачи
@@ -199,40 +199,40 @@ RULES_TEXT = """📜 <b>ПРАВИЛА МАГАЗИНА</b>
 • Перепродажа без разрешения администрации
 • Любые формы мошенничества
 
-❓ Поддержка: @support"""
+....."""
 
-INSTRUCTION_TEXT = """📖 <b>ИНСТРУКЦИЯ</b>
+INSTRUCTION_TEXT = """<tg-emoji emoji-id="6030776052345737530">🎯</tg-emoji> <b>ИНСТРУКЦИЯ</b>
 
 <b>Шаг 1.</b> Выберите товар в главном меню
 
 <b>Шаг 2.</b> Укажите количество аккаунтов
 — Минимальный заказ: <b>$100</b>
 
-<b>Шаг 3.</b> Нажмите <b>«💳 Оплатить»</b>
+<b>Шаг 3.</b> Нажмите <b>«Оплатить»</b>
 — Оплатите в @CryptoBot (USDT / TON / BTC / ETH)
 — Оплата фиксируется <b>автоматически</b>
 
 <b>Шаг 4.</b> Аккаунты придут в течение нескольких минут
 
 <b>Форматы выдачи:</b>
-🤖 Авторег: <code>login:password:email</code>
-👤 Живые: <code>login:password:2fa</code>
-📱 JSON: готовый <code>.json</code> файл
-⚡ Поток 2: <code>login:password:cookies</code>
+Авторег: <code>login:password:email</code>
+Живые: <code>login:password:2fa</code>
+JSON: готовый <code>.json</code> файл
+Поток 2: <code>login:password:cookies</code>
 
-📦 Статус — раздел «Мои заказы»
-❓ Поддержка: @support"""
+ Статус — раздел «Мои заказы»
+....."""
 
-REFERRAL_TEXT = """👥 <b>РЕФЕРАЛЬНАЯ ПРОГРАММА</b>
+REFERRAL_TEXT = """<tg-emoji emoji-id="5258513401784573443">🎯</tg-emoji> <b>РЕФЕРАЛЬНАЯ ПРОГРАММА</b>
 
 Приглашайте друзей и получайте <b>5%</b> с каждой их покупки!
 
 <b>Как работает:</b>
-1️⃣ Скопируйте реферальную ссылку ниже
-2️⃣ Друг переходит по ссылке и делает покупку
-3️⃣ Вы получаете 5% на баланс автоматически
+1- Скопируйте реферальную ссылку ниже
+2- Друг переходит по ссылке и делает покупку
+3- Вы получаете 5% на баланс автоматически
 
-💸 Минимум для вывода: <b>$10</b> — через @support
+Минимум для вывода: <b>$10</b>
 
 """
 
@@ -288,10 +288,10 @@ def on_cb(call):
 
         bot.edit_message_text(
             f"<b>{p['name']}</b>\n{'─'*28}\n"
-            f"💵 Цена: <b>${p['price']:.2f}/шт</b>\n"
-            f"📦 На складе: <b>{p['stock']} шт</b>\n"
-            f"🛒 Мин. заказ: <b>${MIN_ORDER_USD}</b>\n\n"
-            f"ℹ️ {p['desc']}\n\nВыберите количество:",
+            f" Цена: <b>${p['price']:.2f}/шт</b>\n"
+            f" На складе: <b>{p['stock']} шт</b>\n"
+            f" Мин. заказ: <b>${MIN_ORDER_USD}</b>\n\n"
+            f" {p['desc']}\n\nВыберите количество:",
             cid, mid, parse_mode="HTML", reply_markup=kb
         )
 
@@ -300,7 +300,7 @@ def on_cb(call):
         p       = PRODUCTS[key]
         min_qty = ceil_div(MIN_ORDER_USD, int(p["price"]))
         m = bot.edit_message_text(
-            f"✏️ Введите количество аккаунтов:\n\n"
+            f" Введите количество аккаунтов:\n\n"
             f"Мин: <b>{min_qty} шт</b> (≥${MIN_ORDER_USD})\n"
             f"Макс: <b>{p['stock']} шт</b>",
             cid, mid, parse_mode="HTML", reply_markup=back_kb()
@@ -317,11 +317,11 @@ def on_cb(call):
             btn("Отмена",       cb="main_menu",        emoji_id=EMOJI_CANCEL),
         )
         bot.edit_message_text(
-            f"🛒 <b>ПОДТВЕРЖДЕНИЕ</b>\n{'─'*28}\n"
+            f" <b>ПОДТВЕРЖДЕНИЕ</b>\n{'─'*28}\n"
             f"Товар: <b>{p['name']}</b>\n"
             f"Кол-во: <b>{qty} шт</b>\n"
             f"Цена: <b>${p['price']:.2f}/шт</b>\n{'─'*28}\n"
-            f"💰 Итого: <b>${qty * p['price']:.2f} {ASSET}</b>",
+            f" Итого: <b>${qty * p['price']:.2f} {ASSET}</b>",
             cid, mid, parse_mode="HTML", reply_markup=kb
         )
 
@@ -332,7 +332,7 @@ def on_cb(call):
         total    = qty * p["price"]
         order_id = f"ORD-{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
-        bot.edit_message_text("⏳ Создаю счёт...", cid, mid)
+        bot.edit_message_text(" Создаю счёт...", cid, mid)
 
         try:
             invoice = crypto.create_invoice(
@@ -362,7 +362,7 @@ def on_cb(call):
         user["orders"].append({
             "id": order_id, "invoice_id": inv_id,
             "product": p["name"], "quantity": qty,
-            "total": total, "status": "⏳ Ожидает оплаты",
+            "total": total, "status": " Ожидает оплаты",
             "date": datetime.now().strftime("%d.%m.%Y %H:%M")
         })
         save_user(uid, user)
@@ -373,15 +373,13 @@ def on_cb(call):
         kb.add(btn("В меню",           cb="main_menu",        emoji_id=EMOJI_BACK))
 
         bot.edit_message_text(
-            f"✅ <b>СЧЁТ СОЗДАН</b>\n{'─'*28}\n"
-            f"🆔 Заказ: <code>{order_id}</code>\n"
-            f"📋 {p['name']} × {qty} шт\n"
-            f"💰 К оплате: <b>${total:.2f} {ASSET}</b>\n"
-            f"🔖 Invoice: <code>{inv_id}</code>\n{'─'*28}\n\n"
-            f"1️⃣ Нажмите <b>«Оплатить»</b>\n"
-            f"2️⃣ Оплатите через @CryptoBot\n"
+            f'<b><tg-emoji emoji-id="5357069174512303778">🎯</tg-emoji>СЧЁТ СОЗДАН</b>\n{'─'*28}\n'
+            f"Заказ: <code>{order_id}</code>\n"
+            f"{p['name']} × {qty} шт\n"
+            f" К оплате: <b>${total:.2f} {ASSET}</b>\n"
+            f"🔖Invoice: <code>{inv_id}</code>\n{'─'*28}\n\n"
             f"⚡ Оплата фиксируется <b>автоматически</b>\n\n"
-            f"⏰ Счёт действителен <b>30 минут</b>",
+            f" Счёт действителен <b>30 минут</b>",
             cid, mid, parse_mode="HTML", reply_markup=kb
         )
 
@@ -421,7 +419,7 @@ def on_cb(call):
         kb.add(btn("Другая сумма", cb="topup_custom", emoji_id=EMOJI_MANUAL))
         kb.add(btn("Назад",        cb="main_menu",    emoji_id=EMOJI_BACK))
         bot.edit_message_text(
-            f"💳 <b>ПОПОЛНЕНИЕ БАЛАНСА</b>\n{'─'*28}\n"
+            f"<b>ПОПОЛНЕНИЕ БАЛАНСА</b>\n{'─'*28}\n"
             f"Оплата в {ASSET} через @CryptoBot\n\nВыберите сумму:",
             cid, mid, parse_mode="HTML", reply_markup=kb
         )
@@ -429,7 +427,7 @@ def on_cb(call):
     elif data.startswith("topup_"):
         val = data[6:]
         if val == "custom":
-            m = bot.edit_message_text("✏️ Введите сумму пополнения (мин. $10):",
+            m = bot.edit_message_text("Введите сумму пополнения (мин. $10):",
                                       cid, mid, reply_markup=back_kb())
             bot.register_next_step_handler(m, step_topup, cid)
         else:
@@ -439,15 +437,15 @@ def on_cb(call):
         user   = get_user(uid)
         orders = user["orders"]
         if not orders:
-            bot.edit_message_text("📦 <b>Мои заказы</b>\n\nЗаказов пока нет.",
+            bot.edit_message_text("<b>Мои заказы</b>\n\nЗаказов пока нет.",
                                   cid, mid, parse_mode="HTML", reply_markup=back_kb())
             return
-        text = f"📦 <b>МОИ ЗАКАЗЫ</b>\n{'─'*28}\n\n"
+        text = f"<b>МОИ ЗАКАЗЫ</b>\n{'─'*28}\n\n"
         for o in reversed(orders[-10:]):
             text += (
                 f"🆔 <code>{o['id']}</code>\n"
                 f"📋 {o['product']}\n"
-                f"📦 {o['quantity']} шт  💰 ${o['total']:.2f}\n"
+                f"📦 {o['quantity']} шт  ${o['total']:.2f}\n"
                 f"📅 {o['date']}  {o['status']}\n"
                 f"{'─'*20}\n"
             )
@@ -464,10 +462,10 @@ def on_cb(call):
         link = f"https://t.me/{bot.get_me().username}?start={uid}"
         text = (
             REFERRAL_TEXT +
-            f"🔗 <b>Ваша ссылка:</b>\n<code>{link}</code>\n\n"
+            f'<tg-emoji emoji-id="5260730055880876557">🎯</tg-emoji> <b>Ваша ссылка:</b>\n<code>{link}</code>\n\n'
             f"{'─'*28}\n"
-            f"👥 Приглашено: <b>{user.get('ref_count', 0)} чел.</b>\n"
-            f"💰 Заработано: <b>${user.get('ref_earned', 0.0):.2f}</b>"
+            f" Приглашено: <b>{user.get('ref_count', 0)} чел.</b>\n"
+            f" Заработано: <b>${user.get('ref_earned', 0.0):.2f}</b>"
         )
         bot.edit_message_text(text, cid, mid, parse_mode="HTML", reply_markup=back_kb())
 
@@ -488,9 +486,9 @@ def _on_paid(inv_id, meta, cid, mid):
         user["balance"] = round(user["balance"] + total, 2)
         save_user(uid, user)
         text = (
-            f"✅ <b>Баланс пополнен!</b>\n{'─'*28}\n"
-            f"💰 +${total:.2f} {ASSET}\n"
-            f"💳 Ваш баланс: <b>${user['balance']:.2f}</b>"
+            f"✅<b>Баланс пополнен!</b>\n{'─'*28}\n"
+            f" +${total:.2f} {ASSET}\n"
+            f"Ваш баланс: <b>${user['balance']:.2f}</b>"
         )
         if mid:
             try: bot.edit_message_text(text, cid, mid, parse_mode="HTML", reply_markup=back_kb())
@@ -522,15 +520,15 @@ def _on_paid(inv_id, meta, cid, mid):
         try:
             bot.send_message(int(ref_uid),
                 f"🎉 Реферальный бонус <b>+${bonus:.2f}</b>!\n"
-                f"💳 Баланс: <b>${ru['balance']:.2f}</b>", parse_mode="HTML")
+                f"Баланс: <b>${ru['balance']:.2f}</b>", parse_mode="HTML")
         except: pass
 
     text = (
         f"✅ <b>ОПЛАТА ПОДТВЕРЖДЕНА</b>\n{'─'*28}\n"
-        f"🆔 Заказ: <code>{order_id}</code>\n"
-        f"📋 {p.get('name', key)} × {qty} шт\n"
-        f"💰 Оплачено: <b>${total:.2f} {ASSET}</b>\n{'─'*28}\n\n"
-        f"📦 Аккаунты будут выданы в ближайшее время."
+        f"Заказ: <code>{order_id}</code>\n"
+        f"{p.get('name', key)} × {qty} шт\n"
+        f"Оплачено: <b>${total:.2f} {ASSET}</b>\n{'─'*28}\n\n"
+        f"Аккаунты будут выданы в ближайшее время."
     )
     if mid:
         try: bot.edit_message_text(text, cid, mid, parse_mode="HTML", reply_markup=back_kb())
@@ -540,7 +538,7 @@ def _on_paid(inv_id, meta, cid, mid):
 
     try:
         bot.send_message(ADMIN_ID,
-            f"🛒 <b>НОВЫЙ ОПЛАЧЕННЫЙ ЗАКАЗ</b>\n{'─'*28}\n"
+            f"🛒<b>НОВЫЙ ОПЛАЧЕННЫЙ ЗАКАЗ</b>\n{'─'*28}\n"
             f"👤 UID: <code>{uid}</code>\n"
             f"🆔 {order_id}\n"
             f"📋 {p.get('name', key)} × {qty} шт\n"
@@ -567,10 +565,10 @@ def step_qty(msg, key, cid):
         btn("Отмена",       cb="main_menu",        emoji_id=EMOJI_CANCEL),
     )
     bot.send_message(cid,
-        f"🛒 <b>ПОДТВЕРЖДЕНИЕ</b>\n{'─'*28}\n"
+        f"<b>ПОДТВЕРЖДЕНИЕ</b>\n{'─'*28}\n"
         f"Товар: <b>{p['name']}</b>\n"
         f"Кол-во: <b>{qty} шт</b>\n"
-        f"💰 Итого: <b>${total:.2f} {ASSET}</b>",
+        f"Итого: <b>${total:.2f} {ASSET}</b>",
         parse_mode="HTML", reply_markup=kb)
 
 def step_topup(msg, cid):
@@ -613,13 +611,11 @@ def _create_topup(uid, cid, mid, amount):
     kb.add(btn("В меню",           cb="main_menu",        emoji_id=EMOJI_BACK))
 
     text = (
-        f"💳 <b>СЧЁТ НА ПОПОЛНЕНИЕ</b>\n{'─'*28}\n"
-        f"💰 Сумма: <b>${amount:.2f} {ASSET}</b>\n"
+        f"<b>СЧЁТ НА ПОПОЛНЕНИЕ</b>\n{'─'*28}\n"
+        f"Сумма: <b>${amount:.2f} {ASSET}</b>\n"
         f"🔖 Invoice: <code>{inv_id}</code>\n{'─'*28}\n\n"
-        f"1️⃣ Нажмите <b>«Оплатить»</b>\n"
-        f"2️⃣ Оплатите через @CryptoBot\n"
         f"⚡ Оплата фиксируется <b>автоматически</b>\n\n"
-        f"⏰ Счёт действителен <b>30 минут</b>"
+        f" Счёт действителен <b>30 минут</b>"
     )
     if mid: bot.edit_message_text(text, cid, mid, parse_mode="HTML", reply_markup=kb)
     else:   bot.send_message(cid, text, parse_mode="HTML", reply_markup=kb)
