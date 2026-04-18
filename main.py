@@ -12,27 +12,25 @@ BOT_TOKEN      = "8320997126:AAHyPYlfMWOOgYrTNPZMfF0GOrE_hh7gtcM"
 CRYPTO_TOKEN   = "562214:AABJIaVpSkcIR7FvY7B8Oh3TszuqCUgi0Tk"
 ADMIN_ID       = 8118184388
 CRYPTO_BOT_URL = "https://pay.crypt.bot/api"
-# CRYPTO_BOT_URL = "https://testnet-pay.crypt.bot/api"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
 # ─── Custom Emoji IDs ────────────────────────────────────────────
-# Замените на свои ID (берутся через @stickers или инспектор клиента)
-EMOJI_AUTOREG  = "5258108352008823107"   # 🤖
-EMOJI_LIVE     = "5260399854500191689"   # 👤
-EMOJI_JSON     = "5258185631355378853"   # 📱
-EMOJI_STREAM2  = "6030776052345737530"   # ⚡
-EMOJI_TOPUP    = "5258204546391351475"   # 💳
-EMOJI_ORDERS   = "6039496266180726678"   # 📦
-EMOJI_INSTRUCT = "6030776052345737530"   # 📖
-EMOJI_RULES    = "5258185631355378853"   # 📜
-EMOJI_REF      = "5258513401784573443"   # 👥
-EMOJI_BACK     = "6039539366177541657"   # ◀️
-EMOJI_PAY      = "5258204546391351475"   # 💳
-EMOJI_CHECK    = "6030776052345737530"   # 🔄
-EMOJI_CONFIRM  = "5258215846450305872"   # ✅
-EMOJI_CANCEL   = "6039539366177541657"   # ❌
-EMOJI_MANUAL   = "6030776052345737530"   # ✏️
+EMOJI_AUTOREG  = "5258108352008823107"
+EMOJI_LIVE     = "5260399854500191689"
+EMOJI_JSON     = "5258185631355378853"
+EMOJI_STREAM2  = "6030776052345737530"
+EMOJI_TOPUP    = "5258204546391351475"
+EMOJI_ORDERS   = "6039496266180726678"
+EMOJI_INSTRUCT = "6030776052345737530"
+EMOJI_RULES    = "5258185631355378853"
+EMOJI_REF      = "5258513401784573443"
+EMOJI_BACK     = "6039539366177541657"
+EMOJI_PAY      = "5258204546391351475"
+EMOJI_CHECK    = "6030776052345737530"
+EMOJI_CONFIRM  = "5258215846450305872"
+EMOJI_CANCEL   = "6039539366177541657"
+EMOJI_MANUAL   = "6030776052345737530"
 
 # ─── Crypto Bot API ─────────────────────────────────────────────
 class CryptoPayAPI:
@@ -64,20 +62,21 @@ class CryptoPayAPI:
 
 crypto = CryptoPayAPI(CRYPTO_TOKEN, CRYPTO_BOT_URL)
 
-# ─── Товары ─────────────────────────────────────────────────────
-PRODUCTS = {
-    "autoreg": {"name": "Авторег без 2FA",       "price": 4.0,  "stock": 136, "desc": "Авторег аккаунты без 2FA, фарм 7+ дней"},
-    "live":    {"name": "Живые аккаунты",         "price": 7.0,  "stock": 256, "desc": "Живые аккаунты с историей 30+ дней"},
-    "json":    {"name": "JSON Android (эмулятор)","price": 4.7,  "stock": 125, "desc": "JSON-файлы для LDPlayer, BlueStacks, MeMu"},
-    "stream2": {"name": "Живые | Поток 2",        "price": 7.5,  "stock": 0,   "desc": "Премиум живые аккаунты второго потока"},
+# ─── Товары (дефолтные) ─────────────────────────────────────────
+DEFAULT_PRODUCTS = {
+    "autoreg": {"name": "Авторег без 2FA",        "price": 4.0,  "stock": 136, "desc": "Авторег аккаунты без 2FA, фарм 7+ дней"},
+    "live":    {"name": "Живые аккаунты",          "price": 4.5,  "stock": 256, "desc": "Живые аккаунты с историей 30+ дней"},
+    "json":    {"name": "Код Android (эмулятор)", "price": 3.5,  "stock": 125, "desc": "JSON-файлы для LDPlayer, BlueStacks, MeMu"},
+    "stream2": {"name": "Живые | Поток 2",         "price": 7.5,  "stock": 0,   "desc": "Премиум живые аккаунты второго потока"},
 }
 
-MIN_ORDER_USD = 100
+MIN_ORDER_QTY = 30   # минимальное количество штук
 ASSET         = "USDT"
 
 # ─── БД ─────────────────────────────────────────────────────────
-DB_FILE       = "users_db.json"
-INVOICES_FILE = "invoices_db.json"
+DB_FILE        = "users_db.json"
+INVOICES_FILE  = "invoices_db.json"
+PRODUCTS_FILE  = "products_db.json"
 
 def load_json(path):
     if os.path.exists(path):
@@ -88,6 +87,17 @@ def load_json(path):
 def save_json(path, data):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+
+def get_products():
+    """Загружает товары из файла или возвращает дефолтные."""
+    db = load_json(PRODUCTS_FILE)
+    if not db:
+        save_json(PRODUCTS_FILE, DEFAULT_PRODUCTS)
+        return DEFAULT_PRODUCTS
+    return db
+
+def save_products(data):
+    save_json(PRODUCTS_FILE, data)
 
 def get_user(uid):
     db  = load_json(DB_FILE)
@@ -110,26 +120,25 @@ def save_invoice(inv_id, meta):
 def get_inv_meta(inv_id):
     return load_json(INVOICES_FILE).get(str(inv_id))
 
-def ceil_div(a, b):
-    return (a + b - 1) // b
-
 def btn(text, cb=None, url=None, emoji_id=None):
-    """Хелпер создания кнопки с кастомным эмодзи."""
     kwargs = {}
-    if cb:        kwargs["callback_data"]       = cb
-    if url:       kwargs["url"]                 = url
-    if emoji_id:  kwargs["icon_custom_emoji_id"] = emoji_id
+    if cb:       kwargs["callback_data"]        = cb
+    if url:      kwargs["url"]                  = url
+    if emoji_id: kwargs["icon_custom_emoji_id"] = emoji_id
     return types.InlineKeyboardButton(text=text, **kwargs)
+
+# ─── Состояния админа ────────────────────────────────────────────
+admin_states = {}   # uid -> {"action": ..., "key": ...}
 
 # ─── Клавиатуры ─────────────────────────────────────────────────
 def main_kb():
     kb = types.InlineKeyboardMarkup(row_width=2)
     kb.row(
         btn("Авторег без 2FA  •  4$",   cb="buy_autoreg",  emoji_id=EMOJI_AUTOREG),
-        btn("Живые аккаунты  •  7$",    cb="buy_live",     emoji_id=EMOJI_LIVE),
+        btn("Живые аккаунты  •  4.5$",    cb="buy_live",     emoji_id=EMOJI_LIVE),
     )
     kb.row(
-        btn("JSON Android  •  4.7$",    cb="buy_json",     emoji_id=EMOJI_JSON),
+        btn("Код Android  •  3.5$",    cb="buy_json",     emoji_id=EMOJI_JSON),
         btn("Живые | Поток 2  •  7.5$", cb="buy_stream2",  emoji_id=EMOJI_STREAM2),
     )
     kb.row(
@@ -150,17 +159,47 @@ def back_kb():
     kb.add(btn("Назад в меню", cb="main_menu", emoji_id=EMOJI_BACK))
     return kb
 
+def admin_kb():
+    """Главное меню админ-панели."""
+    PRODUCTS = get_products()
+    kb = types.InlineKeyboardMarkup(row_width=1)
+    for key, p in PRODUCTS.items():
+        stock_str = f"{p['stock']} шт" if p['stock'] > 0 else "❌ нет"
+        kb.add(btn(
+            f"✏️ {p['name']}  •  ${p['price']:.2f}  •  {stock_str}",
+            cb=f"admin_edit_{key}"
+        ))
+    kb.add(btn("📊 Статистика",    cb="admin_stats"))
+    kb.add(btn("📋 Все заказы",    cb="admin_orders"))
+    kb.add(btn("👥 Все юзеры",     cb="admin_users"))
+    kb.add(btn("🚪 Выйти из панели", cb="admin_exit"))
+    return kb
+
+def admin_product_kb(key):
+    """Кнопки редактирования конкретного товара."""
+    kb = types.InlineKeyboardMarkup(row_width=2)
+    kb.add(
+        btn("💲 Изменить цену",      cb=f"admin_price_{key}"),
+        btn("📦 Изменить остаток",   cb=f"admin_stock_{key}"),
+    )
+    kb.add(btn("◀️ Назад к панели", cb="admin_main"))
+    return kb
+
 def main_text(uid):
+    PRODUCTS = get_products()
     u = get_user(uid)
+    lines = ""
+    for key, p in PRODUCTS.items():
+        if p["stock"] > 0:
+            lines += f" {p['name']}  — <b>{p['stock']} шт</b>\n"
+        else:
+            lines += f" {p['name']}  — <b>❌ нет в наличии</b>\n"
     return (
         f"{'─'*28}\n"
-        f'<tg-emoji emoji-id="5258204546391351475">🎯</tg-emoji> Баланс: <b>${u['balance']:.2f}</b>   Заказов: <b>{len(u['orders'])}</b>\n'
+        f"💰 Баланс: <b>${u['balance']:.2f}</b>   Заказов: <b>{len(u['orders'])}</b>\n"
         f"{'─'*28}\n\n"
         f"<b>Наличие на складе:</b>\n"
-        f" Авторег без 2FA  — <b>136 шт</b>\n"
-        f" Живые аккаунты   — <b>256 шт</b>\n"
-        f" JSON Android     — <b>125 шт</b>\n"
-        f" Живые | Поток 2  — <b>❌ нет в наличии</b>\n\n"
+        f"{lines}\n"
         f"👇 Выберите товар или раздел:"
     )
 
@@ -180,8 +219,8 @@ RULES_TEXT = """<tg-emoji emoji-id="5258185631355378853">🎯</tg-emoji> <b>ПР
 
 <b>2. Цены и товары</b>
 • Авторег без 2FA — <b>$4/шт</b> (фарм 7+ дней)
-• Живые аккаунты — <b>$7/шт</b> (активность 30+ дней)
-• JSON Android — <b>$4.7/шт</b> (LDPlayer / BlueStacks / MeMu)
+• Живые аккаунты — <b>$4.5/шт</b> (активность 30+ дней)
+• JSON Android — <b>$3.5/шт</b> (LDPlayer / BlueStacks / MeMu)
 • Живые | Поток 2 — <b>$7.5/шт</b> (премиум)
 
 <b>3. Гарантия и замены</b>
@@ -215,9 +254,9 @@ INSTRUCTION_TEXT = """<tg-emoji emoji-id="6030776052345737530">🎯</tg-emoji> <
 <b>Шаг 4.</b> Аккаунты придут в течение нескольких минут
 
 <b>Форматы выдачи:</b>
-Авторег: <code>login:password:email</code>
+Авторег: <code>login:password</code>
 Живые: <code>login:password:2fa</code>
-JSON: готовый <code>.json</code> файл
+Код:  <code>по коду</code> 
 Поток 2: <code>login:password:cookies</code>
 
  Статус — раздел «Мои заказы»
@@ -248,6 +287,20 @@ def cmd_start(msg):
             save_user(uid, user)
     send_main(uid, msg.chat.id)
 
+# ─── /admin ─────────────────────────────────────────────────────
+@bot.message_handler(commands=["admin"])
+def cmd_admin(msg):
+    uid = msg.from_user.id
+    if uid != ADMIN_ID:
+        bot.send_message(msg.chat.id, "❌ Нет доступа.")
+        return
+    bot.send_message(
+        msg.chat.id,
+        "<b>🔧 АДМИН-ПАНЕЛЬ</b>\n\nВыберите товар для редактирования:",
+        parse_mode="HTML",
+        reply_markup=admin_kb()
+    )
+
 # ─── Callbacks ──────────────────────────────────────────────────
 @bot.callback_query_handler(func=lambda c: True)
 def on_cb(call):
@@ -257,12 +310,118 @@ def on_cb(call):
     data = call.data
     bot.answer_callback_query(call.id)
 
-    if data == "main_menu":
+    # ── Админ-панель ────────────────────────────────────────────
+    if data == "admin_main":
+        if uid != ADMIN_ID: return
+        bot.edit_message_text(
+            "<b>🔧 АДМИН-ПАНЕЛЬ</b>\n\nВыберите товар для редактирования:",
+            cid, mid, parse_mode="HTML", reply_markup=admin_kb()
+        )
+
+    elif data == "admin_exit":
+        if uid != ADMIN_ID: return
+        bot.edit_message_text("✅ Вышли из панели.", cid, mid)
+
+    elif data.startswith("admin_edit_"):
+        if uid != ADMIN_ID: return
+        key      = data[11:]
+        PRODUCTS = get_products()
+        p        = PRODUCTS.get(key)
+        if not p: return
+        bot.edit_message_text(
+            f"<b>✏️ Редактирование: {p['name']}</b>\n{'─'*28}\n"
+            f"💲 Цена: <b>${p['price']:.2f}/шт</b>\n"
+            f"📦 Остаток: <b>{p['stock']} шт</b>\n"
+            f"📝 Описание: {p['desc']}",
+            cid, mid, parse_mode="HTML", reply_markup=admin_product_kb(key)
+        )
+
+    elif data.startswith("admin_price_"):
+        if uid != ADMIN_ID: return
+        key = data[12:]
+        admin_states[uid] = {"action": "set_price", "key": key}
+        PRODUCTS = get_products()
+        p = PRODUCTS[key]
+        m = bot.edit_message_text(
+            f"💲 Введите новую цену для <b>{p['name']}</b>\n"
+            f"Текущая цена: <b>${p['price']:.2f}</b>\n\nВведите число (например: 5.5):",
+            cid, mid, parse_mode="HTML", reply_markup=admin_back_kb()
+        )
+
+    elif data.startswith("admin_stock_"):
+        if uid != ADMIN_ID: return
+        key = data[12:]
+        admin_states[uid] = {"action": "set_stock", "key": key}
+        PRODUCTS = get_products()
+        p = PRODUCTS[key]
+        m = bot.edit_message_text(
+            f"📦 Введите новый остаток для <b>{p['name']}</b>\n"
+            f"Текущий остаток: <b>{p['stock']} шт</b>\n\nВведите число (например: 500):",
+            cid, mid, parse_mode="HTML", reply_markup=admin_back_kb()
+        )
+
+    elif data == "admin_stats":
+        if uid != ADMIN_ID: return
+        db       = load_json(DB_FILE)
+        inv_db   = load_json(INVOICES_FILE)
+        total_users  = len(db)
+        paid_orders  = sum(1 for v in inv_db.values() if v.get("status") == "paid" and v.get("type") == "order")
+        total_revenue = sum(v.get("total", 0) for v in inv_db.values() if v.get("status") == "paid")
+        PRODUCTS = get_products()
+        stock_text = "\n".join(
+            f"  • {p['name']}: <b>{p['stock']} шт</b>"
+            for p in PRODUCTS.values()
+        )
+        bot.edit_message_text(
+            f"<b>📊 СТАТИСТИКА</b>\n{'─'*28}\n"
+            f"👥 Пользователей: <b>{total_users}</b>\n"
+            f"🛒 Оплаченных заказов: <b>{paid_orders}</b>\n"
+            f"💰 Общая выручка: <b>${total_revenue:.2f}</b>\n\n"
+            f"<b>Остатки на складе:</b>\n{stock_text}",
+            cid, mid, parse_mode="HTML", reply_markup=admin_back_kb()
+        )
+
+    elif data == "admin_orders":
+        if uid != ADMIN_ID: return
+        inv_db = load_json(INVOICES_FILE)
+        paid   = [(k, v) for k, v in inv_db.items() if v.get("status") == "paid" and v.get("type") == "order"]
+        paid   = sorted(paid, key=lambda x: x[1].get("created", ""), reverse=True)[:15]
+        if not paid:
+            text = "<b>📋 Заказы</b>\n\nЗаказов пока нет."
+        else:
+            text = f"<b>📋 ПОСЛЕДНИЕ ЗАКАЗЫ</b>\n{'─'*28}\n\n"
+            PRODUCTS = get_products()
+            for inv_id, v in paid:
+                p_name = PRODUCTS.get(v.get("key", ""), {}).get("name", v.get("key", "?"))
+                text += (
+                    f"🆔 {v.get('order_id','?')}\n"
+                    f"👤 UID: <code>{v.get('uid','?')}</code>\n"
+                    f"📋 {p_name} × {v.get('qty',0)} шт\n"
+                    f"💰 ${v.get('total',0):.2f}\n"
+                    f"{'─'*20}\n"
+                )
+        bot.edit_message_text(text, cid, mid, parse_mode="HTML", reply_markup=admin_back_kb())
+
+    elif data == "admin_users":
+        if uid != ADMIN_ID: return
+        db = load_json(DB_FILE)
+        text = f"<b>👥 ВСЕ ПОЛЬЗОВАТЕЛИ</b>\n{'─'*28}\n\n"
+        for u_id, u_data in list(db.items())[-20:]:
+            text += (
+                f"👤 <code>{u_id}</code>  "
+                f"💰${u_data.get('balance', 0):.2f}  "
+                f"🛒{len(u_data.get('orders', []))} заказов\n"
+            )
+        bot.edit_message_text(text, cid, mid, parse_mode="HTML", reply_markup=admin_back_kb())
+
+    # ── Обычные кнопки ──────────────────────────────────────────
+    elif data == "main_menu":
         send_main(uid, cid, mid)
 
     elif data.startswith("buy_"):
-        key = data[4:]
-        p   = PRODUCTS.get(key)
+        key      = data[4:]
+        PRODUCTS = get_products()
+        p        = PRODUCTS.get(key)
         if not p: return
 
         if p["stock"] == 0:
@@ -274,7 +433,7 @@ def on_cb(call):
             )
             return
 
-        min_qty = ceil_div(MIN_ORDER_USD, int(p["price"]))
+        min_qty = MIN_ORDER_QTY
         kb      = types.InlineKeyboardMarkup(row_width=2)
         btns    = []
         for mult in [1, 2, 5, 10]:
@@ -288,20 +447,20 @@ def on_cb(call):
 
         bot.edit_message_text(
             f"<b>{p['name']}</b>\n{'─'*28}\n"
-            f" Цена: <b>${p['price']:.2f}/шт</b>\n"
-            f" На складе: <b>{p['stock']} шт</b>\n"
-            f" Мин. заказ: <b>${MIN_ORDER_USD}</b>\n\n"
-            f" {p['desc']}\n\nВыберите количество:",
+            f"💲 Цена: <b>${p['price']:.2f}/шт</b>\n"
+            f"📦 На складе: <b>{p['stock']} шт</b>\n"
+            f"📌 Мин. заказ: <b>{MIN_ORDER_QTY} шт</b>\n\n"
+            f"📝 {p['desc']}\n\nВыберите количество:",
             cid, mid, parse_mode="HTML", reply_markup=kb
         )
 
     elif data.startswith("manual_"):
-        key     = data[7:]
-        p       = PRODUCTS[key]
-        min_qty = ceil_div(MIN_ORDER_USD, int(p["price"]))
+        key      = data[7:]
+        PRODUCTS = get_products()
+        p        = PRODUCTS[key]
         m = bot.edit_message_text(
-            f" Введите количество аккаунтов:\n\n"
-            f"Мин: <b>{min_qty} шт</b> (≥${MIN_ORDER_USD})\n"
+            f"✏️ Введите количество аккаунтов:\n\n"
+            f"Мин: <b>{MIN_ORDER_QTY} шт</b>\n"
             f"Макс: <b>{p['stock']} шт</b>",
             cid, mid, parse_mode="HTML", reply_markup=back_kb()
         )
@@ -309,30 +468,32 @@ def on_cb(call):
 
     elif data.startswith("order_"):
         _, key, qty_s = data.split("_", 2)
-        qty = int(qty_s)
-        p   = PRODUCTS[key]
-        kb  = types.InlineKeyboardMarkup()
+        qty      = int(qty_s)
+        PRODUCTS = get_products()
+        p        = PRODUCTS[key]
+        kb       = types.InlineKeyboardMarkup()
         kb.add(
             btn("Создать счёт", cb=f"pay_{key}_{qty}", emoji_id=EMOJI_CONFIRM),
             btn("Отмена",       cb="main_menu",        emoji_id=EMOJI_CANCEL),
         )
         bot.edit_message_text(
-            f" <b>ПОДТВЕРЖДЕНИЕ</b>\n{'─'*28}\n"
+            f"<b>✅ ПОДТВЕРЖДЕНИЕ</b>\n{'─'*28}\n"
             f"Товар: <b>{p['name']}</b>\n"
             f"Кол-во: <b>{qty} шт</b>\n"
             f"Цена: <b>${p['price']:.2f}/шт</b>\n{'─'*28}\n"
-            f" Итого: <b>${qty * p['price']:.2f} {ASSET}</b>",
+            f"💰 Итого: <b>${qty * p['price']:.2f} {ASSET}</b>",
             cid, mid, parse_mode="HTML", reply_markup=kb
         )
 
     elif data.startswith("pay_"):
         _, key, qty_s = data.split("_", 2)
         qty      = int(qty_s)
+        PRODUCTS = get_products()
         p        = PRODUCTS[key]
         total    = qty * p["price"]
         order_id = f"ORD-{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
-        bot.edit_message_text(" Создаю счёт...", cid, mid)
+        bot.edit_message_text("⏳ Создаю счёт...", cid, mid)
 
         try:
             invoice = crypto.create_invoice(
@@ -362,24 +523,24 @@ def on_cb(call):
         user["orders"].append({
             "id": order_id, "invoice_id": inv_id,
             "product": p["name"], "quantity": qty,
-            "total": total, "status": " Ожидает оплаты",
+            "total": total, "status": "⏳ Ожидает оплаты",
             "date": datetime.now().strftime("%d.%m.%Y %H:%M")
         })
         save_user(uid, user)
 
         kb = types.InlineKeyboardMarkup()
-        kb.add(btn("Оплатить",       url=pay_url,             emoji_id=EMOJI_PAY))
-        kb.add(btn("Проверить оплату", cb=f"check_{inv_id}",  emoji_id=EMOJI_CHECK))
-        kb.add(btn("В меню",           cb="main_menu",        emoji_id=EMOJI_BACK))
+        kb.add(btn("Оплатить",          url=pay_url,            emoji_id=EMOJI_PAY))
+        kb.add(btn("Проверить оплату",  cb=f"check_{inv_id}",   emoji_id=EMOJI_CHECK))
+        kb.add(btn("В меню",            cb="main_menu",         emoji_id=EMOJI_BACK))
 
         bot.edit_message_text(
-            f'<b><tg-emoji emoji-id="5357069174512303778">🎯</tg-emoji>СЧЁТ СОЗДАН</b>\n{'─'*28}\n'
+            f"<b>🎯 СЧЁТ СОЗДАН</b>\n{'─'*28}\n"
             f"Заказ: <code>{order_id}</code>\n"
             f"{p['name']} × {qty} шт\n"
-            f" К оплате: <b>${total:.2f} {ASSET}</b>\n"
-            f"🔖Invoice: <code>{inv_id}</code>\n{'─'*28}\n\n"
-            f"⚡ Оплата фиксируется <b>автоматически</b>\n\n"
-            f" Счёт действителен <b>30 минут</b>",
+            f"💰 К оплате: <b>${total:.2f} {ASSET}</b>\n"
+            f"🔖 Invoice: <code>{inv_id}</code>\n{'─'*28}\n\n"
+            f"⚡ Оплата фиксируется <b>автоматически</b>\n"
+            f"⏱ Счёт действителен <b>30 минут</b>",
             cid, mid, parse_mode="HTML", reply_markup=kb
         )
 
@@ -419,7 +580,7 @@ def on_cb(call):
         kb.add(btn("Другая сумма", cb="topup_custom", emoji_id=EMOJI_MANUAL))
         kb.add(btn("Назад",        cb="main_menu",    emoji_id=EMOJI_BACK))
         bot.edit_message_text(
-            f"<b>ПОПОЛНЕНИЕ БАЛАНСА</b>\n{'─'*28}\n"
+            f"<b>💳 ПОПОЛНЕНИЕ БАЛАНСА</b>\n{'─'*28}\n"
             f"Оплата в {ASSET} через @CryptoBot\n\nВыберите сумму:",
             cid, mid, parse_mode="HTML", reply_markup=kb
         )
@@ -427,7 +588,7 @@ def on_cb(call):
     elif data.startswith("topup_"):
         val = data[6:]
         if val == "custom":
-            m = bot.edit_message_text("Введите сумму пополнения (мин. $10):",
+            m = bot.edit_message_text("✏️ Введите сумму пополнения (мин. $10):",
                                       cid, mid, reply_markup=back_kb())
             bot.register_next_step_handler(m, step_topup, cid)
         else:
@@ -437,10 +598,10 @@ def on_cb(call):
         user   = get_user(uid)
         orders = user["orders"]
         if not orders:
-            bot.edit_message_text("<b>Мои заказы</b>\n\nЗаказов пока нет.",
+            bot.edit_message_text("<b>📦 Мои заказы</b>\n\nЗаказов пока нет.",
                                   cid, mid, parse_mode="HTML", reply_markup=back_kb())
             return
-        text = f"<b>МОИ ЗАКАЗЫ</b>\n{'─'*28}\n\n"
+        text = f"<b>📦 МОИ ЗАКАЗЫ</b>\n{'─'*28}\n\n"
         for o in reversed(orders[-10:]):
             text += (
                 f"🆔 <code>{o['id']}</code>\n"
@@ -469,11 +630,73 @@ def on_cb(call):
         )
         bot.edit_message_text(text, cid, mid, parse_mode="HTML", reply_markup=back_kb())
 
+# ─── Вспомогательные клавиатуры ─────────────────────────────────
+def admin_back_kb():
+    kb = types.InlineKeyboardMarkup()
+    kb.add(btn("◀️ Назад к панели", cb="admin_main"))
+    return kb
+
+# ─── Обработка текстовых сообщений от админа ────────────────────
+@bot.message_handler(func=lambda msg: msg.from_user.id == ADMIN_ID and msg.from_user.id in admin_states)
+def admin_text_handler(msg):
+    uid   = msg.from_user.id
+    state = admin_states.get(uid)
+    if not state:
+        return
+
+    action = state["action"]
+    key    = state["key"]
+    text   = msg.text.strip()
+
+    PRODUCTS = get_products()
+    p        = PRODUCTS.get(key)
+    if not p:
+        del admin_states[uid]
+        return
+
+    if action == "set_price":
+        try:
+            new_price = float(text.replace(",", "."))
+            if new_price <= 0: raise ValueError
+        except:
+            bot.send_message(uid, "❌ Некорректная цена. Введите число > 0 (например: 5.5)")
+            return
+        old_price         = p["price"]
+        PRODUCTS[key]["price"] = new_price
+        save_products(PRODUCTS)
+        del admin_states[uid]
+        bot.send_message(
+            uid,
+            f"✅ Цена на <b>{p['name']}</b> обновлена!\n"
+            f"${old_price:.2f} → <b>${new_price:.2f}</b>",
+            parse_mode="HTML",
+            reply_markup=admin_kb()
+        )
+
+    elif action == "set_stock":
+        try:
+            new_stock = int(text)
+            if new_stock < 0: raise ValueError
+        except:
+            bot.send_message(uid, "❌ Некорректный остаток. Введите целое число ≥ 0")
+            return
+        old_stock              = p["stock"]
+        PRODUCTS[key]["stock"] = new_stock
+        save_products(PRODUCTS)
+        del admin_states[uid]
+        bot.send_message(
+            uid,
+            f"✅ Остаток для <b>{p['name']}</b> обновлён!\n"
+            f"{old_stock} шт → <b>{new_stock} шт</b>",
+            parse_mode="HTML",
+            reply_markup=admin_kb()
+        )
+
 # ─── Оплата подтверждена ────────────────────────────────────────
 def _on_paid(inv_id, meta, cid, mid):
     db = load_json(INVOICES_FILE)
     if db.get(str(inv_id), {}).get("status") == "paid":
-        return  # уже обработан
+        return
     db[str(inv_id)]["status"] = "paid"
     save_json(INVOICES_FILE, db)
 
@@ -486,8 +709,8 @@ def _on_paid(inv_id, meta, cid, mid):
         user["balance"] = round(user["balance"] + total, 2)
         save_user(uid, user)
         text = (
-            f"✅<b>Баланс пополнен!</b>\n{'─'*28}\n"
-            f" +${total:.2f} {ASSET}\n"
+            f"✅ <b>Баланс пополнен!</b>\n{'─'*28}\n"
+            f"💰 +${total:.2f} {ASSET}\n"
             f"Ваш баланс: <b>${user['balance']:.2f}</b>"
         )
         if mid:
@@ -500,6 +723,7 @@ def _on_paid(inv_id, meta, cid, mid):
     key      = meta["key"]
     qty      = meta["qty"]
     order_id = meta["order_id"]
+    PRODUCTS = get_products()
     p        = PRODUCTS.get(key, {})
 
     user = get_user(uid)
@@ -528,7 +752,7 @@ def _on_paid(inv_id, meta, cid, mid):
         f"Заказ: <code>{order_id}</code>\n"
         f"{p.get('name', key)} × {qty} шт\n"
         f"Оплачено: <b>${total:.2f} {ASSET}</b>\n{'─'*28}\n\n"
-        f"Аккаунты будут выданы в ближайшее время."
+        f"📦 Аккаунты будут выданы в ближайшее время."
     )
     if mid:
         try: bot.edit_message_text(text, cid, mid, parse_mode="HTML", reply_markup=back_kb())
@@ -538,7 +762,7 @@ def _on_paid(inv_id, meta, cid, mid):
 
     try:
         bot.send_message(ADMIN_ID,
-            f"🛒<b>НОВЫЙ ОПЛАЧЕННЫЙ ЗАКАЗ</b>\n{'─'*28}\n"
+            f"🛒 <b>НОВЫЙ ОПЛАЧЕННЫЙ ЗАКАЗ</b>\n{'─'*28}\n"
             f"👤 UID: <code>{uid}</code>\n"
             f"🆔 {order_id}\n"
             f"📋 {p.get('name', key)} × {qty} шт\n"
@@ -548,14 +772,17 @@ def _on_paid(inv_id, meta, cid, mid):
 
 # ─── Next step handlers ─────────────────────────────────────────
 def step_qty(msg, key, cid):
-    uid     = msg.from_user.id
-    p       = PRODUCTS[key]
-    min_qty = ceil_div(MIN_ORDER_USD, int(p["price"]))
+    uid      = msg.from_user.id
+    PRODUCTS = get_products()
+    p        = PRODUCTS[key]
+    min_qty  = MIN_ORDER_QTY
     try:
         qty = int(msg.text.strip())
         assert min_qty <= qty <= p["stock"]
     except:
-        m = bot.send_message(cid, f"❌ Введите число от {min_qty} до {p['stock']}:", reply_markup=back_kb())
+        m = bot.send_message(cid,
+            f"❌ Введите число от {min_qty} до {p['stock']}:",
+            reply_markup=back_kb())
         bot.register_next_step_handler(m, step_qty, key, cid)
         return
     total = qty * p["price"]
@@ -565,7 +792,7 @@ def step_qty(msg, key, cid):
         btn("Отмена",       cb="main_menu",        emoji_id=EMOJI_CANCEL),
     )
     bot.send_message(cid,
-        f"<b>ПОДТВЕРЖДЕНИЕ</b>\n{'─'*28}\n"
+        f"<b>✅ ПОДТВЕРЖДЕНИЕ</b>\n{'─'*28}\n"
         f"Товар: <b>{p['name']}</b>\n"
         f"Кол-во: <b>{qty} шт</b>\n"
         f"Итого: <b>${total:.2f} {ASSET}</b>",
@@ -606,21 +833,21 @@ def _create_topup(uid, cid, mid, amount):
     })
 
     kb = types.InlineKeyboardMarkup()
-    kb.add(btn("Оплатить",        url=pay_url,            emoji_id=EMOJI_PAY))
-    kb.add(btn("Проверить оплату", cb=f"check_{inv_id}",  emoji_id=EMOJI_CHECK))
-    kb.add(btn("В меню",           cb="main_menu",        emoji_id=EMOJI_BACK))
+    kb.add(btn("Оплатить",          url=pay_url,            emoji_id=EMOJI_PAY))
+    kb.add(btn("Проверить оплату",  cb=f"check_{inv_id}",   emoji_id=EMOJI_CHECK))
+    kb.add(btn("В меню",            cb="main_menu",         emoji_id=EMOJI_BACK))
 
     text = (
-        f"<b>СЧЁТ НА ПОПОЛНЕНИЕ</b>\n{'─'*28}\n"
+        f"<b>💳 СЧЁТ НА ПОПОЛНЕНИЕ</b>\n{'─'*28}\n"
         f"Сумма: <b>${amount:.2f} {ASSET}</b>\n"
         f"🔖 Invoice: <code>{inv_id}</code>\n{'─'*28}\n\n"
-        f"⚡ Оплата фиксируется <b>автоматически</b>\n\n"
-        f" Счёт действителен <b>30 минут</b>"
+        f"⚡ Оплата фиксируется <b>автоматически</b>\n"
+        f"⏱ Счёт действителен <b>30 минут</b>"
     )
     if mid: bot.edit_message_text(text, cid, mid, parse_mode="HTML", reply_markup=kb)
     else:   bot.send_message(cid, text, parse_mode="HTML", reply_markup=kb)
 
-# ─── Фоновый поллинг каждые 2 сек ──────────────────────────────
+# ─── Фоновый поллинг ────────────────────────────────────────────
 def poll_loop():
     while True:
         time.sleep(2)
