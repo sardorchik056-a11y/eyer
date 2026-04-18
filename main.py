@@ -10,7 +10,7 @@ import time
 # ─── Конфиг ─────────────────────────────────────────────────────
 BOT_TOKEN      = "8320997126:AAHyPYlfMWOOgYrTNPZMfF0GOrE_hh7gtcM"
 CRYPTO_TOKEN   = "562214:AABJIaVpSkcIR7FvY7B8Oh3TszuqCUgi0Tk"
-ADMIN_ID       = 8118184388
+ADMIN_ID       = 8115654734
 CRYPTO_BOT_URL = "https://pay.crypt.bot/api"
 
 bot = telebot.TeleBot(BOT_TOKEN)
