@@ -89,7 +89,6 @@ def save_json(path, data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 def get_products():
-    """Загружает товары из файла или возвращает дефолтные."""
     db = load_json(PRODUCTS_FILE)
     if not db:
         save_json(PRODUCTS_FILE, DEFAULT_PRODUCTS)
@@ -103,7 +102,7 @@ def get_user(uid):
     db  = load_json(DB_FILE)
     key = str(uid)
     if key not in db:
-        db[key] = {"balance": 0.0, "orders": [], "ref": None, "ref_count": 0, "ref_earned": 0.0}
+        db[key] = {"balance": 0.0, "orders": [], "ref": None, "ref_count": 0, "ref_earned": 0.0, "username": None}
         save_json(DB_FILE, db)
     return db[key]
 
@@ -111,6 +110,42 @@ def save_user(uid, data):
     db = load_json(DB_FILE)
     db[str(uid)] = data
     save_json(DB_FILE, db)
+
+# ─── Сохранение username при каждом взаимодействии ──────────────
+def update_username(user_obj):
+    """Обновляет username пользователя в БД при каждом клике."""
+    if not user_obj:
+        return
+    uid      = user_obj.id
+    username = user_obj.username  # может быть None если нет username
+    db       = load_json(DB_FILE)
+    key      = str(uid)
+    if key not in db:
+        db[key] = {"balance": 0.0, "orders": [], "ref": None, "ref_count": 0, "ref_earned": 0.0, "username": None}
+    db[key]["username"] = username
+    save_json(DB_FILE, db)
+
+def find_user_by_username_or_id(query):
+    """
+    Ищет пользователя по username (с @ или без) или по числовому ID.
+    Возвращает (uid_str, user_data) или (None, None).
+    """
+    db = load_json(DB_FILE)
+
+    # Если передан числовой ID
+    if query.lstrip("-").isdigit():
+        key = str(query)
+        if key in db:
+            return key, db[key]
+        return None, None
+
+    # Поиск по username
+    target = query.lstrip("@").lower()
+    for uid_str, udata in db.items():
+        uname = udata.get("username")
+        if uname and uname.lower() == target:
+            return uid_str, udata
+    return None, None
 
 def save_invoice(inv_id, meta):
     db = load_json(INVOICES_FILE)
@@ -160,7 +195,6 @@ def back_kb():
     return kb
 
 def admin_kb():
-    """Главное меню админ-панели."""
     PRODUCTS = get_products()
     kb = types.InlineKeyboardMarkup(row_width=1)
     for key, p in PRODUCTS.items():
@@ -172,11 +206,11 @@ def admin_kb():
     kb.add(btn("📊 Статистика",    cb="admin_stats"))
     kb.add(btn("📋 Все заказы",    cb="admin_orders"))
     kb.add(btn("👥 Все юзеры",     cb="admin_users"))
+    kb.add(btn("📣 Рассылка",      cb="admin_broadcast"))   # ← НОВОЕ
     kb.add(btn("🚪 Выйти из панели", cb="admin_exit"))
     return kb
 
 def admin_product_kb(key):
-    """Кнопки редактирования конкретного товара."""
     kb = types.InlineKeyboardMarkup(row_width=2)
     kb.add(
         btn("💲 Изменить цену",      cb=f"admin_price_{key}"),
@@ -279,6 +313,7 @@ REFERRAL_TEXT = """<tg-emoji emoji-id="5258513401784573443">🎯</tg-emoji> <b>�
 @bot.message_handler(commands=["start"])
 def cmd_start(msg):
     uid  = msg.from_user.id
+    update_username(msg.from_user)   # ← сохраняем username
     args = msg.text.split()
     if len(args) > 1 and args[1] != str(uid):
         user = get_user(uid)
@@ -301,6 +336,73 @@ def cmd_admin(msg):
         reply_markup=admin_kb()
     )
 
+# ─── /add — выдача баланса ───────────────────────────────────────
+# Использование: /add @username 50   или   /add 123456789 50
+@bot.message_handler(commands=["add"])
+def cmd_add(msg):
+    uid = msg.from_user.id
+    if uid != ADMIN_ID:
+        bot.send_message(msg.chat.id, "❌ Нет доступа.")
+        return
+
+    parts = msg.text.strip().split()
+    if len(parts) != 3:
+        bot.send_message(
+            msg.chat.id,
+            "❌ Неверный формат.\n\nИспользование:\n"
+            "<code>/add @username 50</code>\n"
+            "<code>/add 123456789 50</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    target_query = parts[1]
+    amount_str   = parts[2]
+
+    try:
+        amount = float(amount_str.replace(",", "."))
+        if amount <= 0:
+            raise ValueError
+    except ValueError:
+        bot.send_message(msg.chat.id, "❌ Некорректная сумма. Укажите число больше 0.")
+        return
+
+    target_uid, target_data = find_user_by_username_or_id(target_query)
+
+    if not target_uid:
+        bot.send_message(
+            msg.chat.id,
+            f"❌ Пользователь <code>{target_query}</code> не найден в базе.",
+            parse_mode="HTML"
+        )
+        return
+
+    target_data["balance"] = round(target_data.get("balance", 0.0) + amount, 2)
+    save_user(target_uid, target_data)
+
+    uname_display = f"@{target_data['username']}" if target_data.get("username") else f"ID {target_uid}"
+
+    bot.send_message(
+        msg.chat.id,
+        f"✅ Баланс пополнен!\n\n"
+        f"👤 Пользователь: {uname_display} (<code>{target_uid}</code>)\n"
+        f"💰 Начислено: <b>+${amount:.2f}</b>\n"
+        f"💳 Новый баланс: <b>${target_data['balance']:.2f}</b>",
+        parse_mode="HTML"
+    )
+
+    # Уведомить пользователя
+    try:
+        bot.send_message(
+            int(target_uid),
+            f"💰 <b>Баланс пополнен администратором!</b>\n\n"
+            f"Начислено: <b>+${amount:.2f}</b>\n"
+            f"Ваш баланс: <b>${target_data['balance']:.2f}</b>",
+            parse_mode="HTML"
+        )
+    except Exception:
+        pass
+
 # ─── Callbacks ──────────────────────────────────────────────────
 @bot.callback_query_handler(func=lambda c: True)
 def on_cb(call):
@@ -309,6 +411,8 @@ def on_cb(call):
     mid  = call.message.message_id
     data = call.data
     bot.answer_callback_query(call.id)
+
+    update_username(call.from_user)   # ← сохраняем username при каждом клике
 
     # ── Админ-панель ────────────────────────────────────────────
     if data == "admin_main":
@@ -342,7 +446,7 @@ def on_cb(call):
         admin_states[uid] = {"action": "set_price", "key": key}
         PRODUCTS = get_products()
         p = PRODUCTS[key]
-        m = bot.edit_message_text(
+        bot.edit_message_text(
             f"💲 Введите новую цену для <b>{p['name']}</b>\n"
             f"Текущая цена: <b>${p['price']:.2f}</b>\n\nВведите число (например: 5.5):",
             cid, mid, parse_mode="HTML", reply_markup=admin_back_kb()
@@ -354,9 +458,23 @@ def on_cb(call):
         admin_states[uid] = {"action": "set_stock", "key": key}
         PRODUCTS = get_products()
         p = PRODUCTS[key]
-        m = bot.edit_message_text(
+        bot.edit_message_text(
             f"📦 Введите новый остаток для <b>{p['name']}</b>\n"
             f"Текущий остаток: <b>{p['stock']} шт</b>\n\nВведите число (например: 500):",
+            cid, mid, parse_mode="HTML", reply_markup=admin_back_kb()
+        )
+
+    # ── Рассылка ────────────────────────────────────────────────
+    elif data == "admin_broadcast":
+        if uid != ADMIN_ID: return
+        db         = load_json(DB_FILE)
+        user_count = len(db)
+        admin_states[uid] = {"action": "broadcast"}
+        bot.edit_message_text(
+            f"📣 <b>РАССЫЛКА</b>\n{'─'*28}\n\n"
+            f"Получателей: <b>{user_count} чел.</b>\n\n"
+            f"Отправьте текст сообщения (поддерживается HTML).\n"
+            f"Можно прикрепить фото — отправьте фото с подписью.",
             cid, mid, parse_mode="HTML", reply_markup=admin_back_kb()
         )
 
@@ -407,8 +525,9 @@ def on_cb(call):
         db = load_json(DB_FILE)
         text = f"<b>👥 ВСЕ ПОЛЬЗОВАТЕЛИ</b>\n{'─'*28}\n\n"
         for u_id, u_data in list(db.items())[-20:]:
+            uname = f"@{u_data['username']}" if u_data.get("username") else "—"
             text += (
-                f"👤 <code>{u_id}</code>  "
+                f"👤 <code>{u_id}</code> {uname}  "
                 f"💰${u_data.get('balance', 0):.2f}  "
                 f"🛒{len(u_data.get('orders', []))} заказов\n"
             )
@@ -636,8 +755,11 @@ def admin_back_kb():
     kb.add(btn("◀️ Назад к панели", cb="admin_main"))
     return kb
 
-# ─── Обработка текстовых сообщений от админа ────────────────────
-@bot.message_handler(func=lambda msg: msg.from_user.id == ADMIN_ID and msg.from_user.id in admin_states)
+# ─── Обработка текстовых и медиа сообщений от админа ────────────
+@bot.message_handler(
+    content_types=["text", "photo"],
+    func=lambda msg: msg.from_user.id == ADMIN_ID and msg.from_user.id in admin_states
+)
 def admin_text_handler(msg):
     uid   = msg.from_user.id
     state = admin_states.get(uid)
@@ -645,9 +767,48 @@ def admin_text_handler(msg):
         return
 
     action = state["action"]
-    key    = state["key"]
-    text   = msg.text.strip()
 
+    # ── Рассылка ────────────────────────────────────────────────
+    if action == "broadcast":
+        del admin_states[uid]
+        db      = load_json(DB_FILE)
+        uids    = list(db.keys())
+        success = 0
+        failed  = 0
+
+        bot.send_message(uid, f"⏳ Начинаю рассылку на {len(uids)} пользователей...")
+
+        for target_uid in uids:
+            try:
+                if msg.content_type == "photo":
+                    photo_id = msg.photo[-1].file_id
+                    caption  = msg.caption or ""
+                    bot.send_photo(int(target_uid), photo_id,
+                                   caption=caption, parse_mode="HTML")
+                else:
+                    bot.send_message(int(target_uid), msg.text, parse_mode="HTML")
+                success += 1
+            except Exception:
+                failed += 1
+            time.sleep(0.05)   # Небольшая задержка чтобы не получить flood
+
+        bot.send_message(
+            uid,
+            f"✅ <b>Рассылка завершена</b>\n\n"
+            f"📤 Отправлено: <b>{success}</b>\n"
+            f"❌ Не доставлено: <b>{failed}</b>",
+            parse_mode="HTML",
+            reply_markup=admin_kb()
+        )
+        return
+
+    # ── Редактирование товара ────────────────────────────────────
+    key = state.get("key")
+    if not key:
+        del admin_states[uid]
+        return
+
+    text     = msg.text.strip() if msg.text else ""
     PRODUCTS = get_products()
     p        = PRODUCTS.get(key)
     if not p:
@@ -661,7 +822,7 @@ def admin_text_handler(msg):
         except:
             bot.send_message(uid, "❌ Некорректная цена. Введите число > 0 (например: 5.5)")
             return
-        old_price         = p["price"]
+        old_price              = p["price"]
         PRODUCTS[key]["price"] = new_price
         save_products(PRODUCTS)
         del admin_states[uid]
