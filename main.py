@@ -6,6 +6,7 @@ import requests
 from datetime import datetime
 import threading
 import time
+import tempfile
 
 # ─── Конфиг ─────────────────────────────────────────────────────
 BOT_TOKEN      = "8320997126:AAHyPYlfMWOOgYrTNPZMfF0GOrE_hh7gtcM"
@@ -78,15 +79,70 @@ DB_FILE        = "users_db.json"
 INVOICES_FILE  = "invoices_db.json"
 PRODUCTS_FILE  = "products_db.json"
 
+# Отдельные локи для каждого файла, чтобы избежать race condition
+_file_locks = {
+    DB_FILE:       threading.Lock(),
+    INVOICES_FILE: threading.Lock(),
+    PRODUCTS_FILE: threading.Lock(),
+}
+
+def _get_lock(path):
+    return _file_locks.get(path, threading.Lock())
+
 def load_json(path):
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
+    lock = _get_lock(path)
+    with lock:
+        if not os.path.exists(path):
+            return {}
+        # Сначала пробуем основной файл
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+                if not content:
+                    raise ValueError("empty file")
+                return json.loads(content)
+        except (json.JSONDecodeError, ValueError, IOError):
+            pass
+        # Если основной повреждён — пробуем бэкап
+        backup = path + ".bak"
+        if os.path.exists(backup):
+            try:
+                with open(backup, "r", encoding="utf-8") as f:
+                    content = f.read().strip()
+                    if content:
+                        data = json.loads(content)
+                        print(f"⚠️  Восстановлено из бэкапа: {path}")
+                        return data
+            except (json.JSONDecodeError, ValueError, IOError):
+                pass
+        print(f"⚠️  Не удалось прочитать {path}, возвращаем пустой dict")
+        return {}
 
 def save_json(path, data):
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    lock = _get_lock(path)
+    with lock:
+        dir_name = os.path.dirname(os.path.abspath(path))
+        tmp_path = None
+        try:
+            # Пишем во временный файл
+            fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            # Бэкап текущего файла перед заменой
+            if os.path.exists(path):
+                try:
+                    os.replace(path, path + ".bak")
+                except Exception:
+                    pass
+            # Атомарная замена
+            os.replace(tmp_path, path)
+        except Exception as e:
+            print(f"❌ Ошибка записи {path}: {e}")
+            if tmp_path and os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
 
 def get_products():
     db = load_json(PRODUCTS_FILE)
@@ -1012,18 +1068,21 @@ def _create_topup(uid, cid, mid, amount):
 def poll_loop():
     while True:
         time.sleep(2)
-        db = load_json(INVOICES_FILE)
-        for inv_id_s, meta in list(db.items()):
-            if meta.get("status") != "active":
-                continue
-            try:
-                inv = crypto.check_invoice(int(inv_id_s))
-                if inv and inv.get("status") == "paid":
-                    cid = int(meta.get("cid", 0))
-                    mid = meta.get("mid", 0)
-                    _on_paid(int(inv_id_s), meta, cid, mid)
-            except:
-                pass
+        try:
+            db = load_json(INVOICES_FILE)
+            for inv_id_s, meta in list(db.items()):
+                if meta.get("status") != "active":
+                    continue
+                try:
+                    inv = crypto.check_invoice(int(inv_id_s))
+                    if inv and inv.get("status") == "paid":
+                        cid = int(meta.get("cid", 0))
+                        mid = meta.get("mid", 0)
+                        _on_paid(int(inv_id_s), meta, cid, mid)
+                except Exception as e:
+                    print(f"⚠️  Ошибка проверки инвойса {inv_id_s}: {e}")
+        except Exception as e:
+            print(f"❌ Ошибка poll_loop: {e}")
 
 # ─── Запуск ─────────────────────────────────────────────────────
 if __name__ == "__main__":
