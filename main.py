@@ -292,29 +292,29 @@ def send_main(uid, cid, mid=None):
 RULES_TEXT = """<tg-emoji emoji-id="5258185631355378853">🎯</tg-emoji> <b>ПРАВИЛА МАГАЗИНА</b>
 
 <b>1. Общие положения</b>
-• Покупая товар, вы соглашаетесь с данными правилами
-• Минимальная сумма заказа: <b>$100</b>
+- Покупая товар, вы соглашаетесь с данными правилами
+- Минимальная сумма заказа: <b>$100</b>
 
 <b>2. Цены и товары</b>
-• Авторег без 2FA — <b>$4/шт</b> (фарм 7+ дней)
-• Живые аккаунты — <b>$4.5/шт</b> (активность 30+ дней)
-• JSON Android — <b>$3.5/шт</b> (LDPlayer / BlueStacks / MeMu)
-• Живые | Поток 2 — <b>$7.5/шт</b> (премиум)
+- Авторег без 2FA — <b>$4/шт</b> (фарм 7+ дней)
+- Живые аккаунты — <b>$4.5/шт</b> (активность 30+ дней)
+- JSON Android — <b>$3.5/шт</b> (LDPlayer / BlueStacks / MeMu)
+- Живые | Поток 2 — <b>$7.5/шт</b> (премиум)
 
 <b>3. Гарантия и замены</b>
-• Гарантия <b>24 часа</b> с момента выдачи
-• Замена если аккаунт не работает при первой проверке
-• Замена НЕ производится при: изменении данных, нарушении правил платформы, истечении 24ч
+- Гарантия <b>24 часа</b> с момента выдачи
+- Замена если аккаунт не работает при первой проверке
+- Замена НЕ производится при: изменении данных, нарушении правил платформы, истечении 24ч
 
 <b>4. Оплата</b>
-• Только криптовалюта через @CryptoBot: USDT, TON, BTC, ETH
-• После создания счёта — <b>30 минут</b> на оплату
-• Возврат после выдачи товара — <b>невозможен</b>
+- Только криптовалюта через @CryptoBot: USDT, TON, BTC, ETH
+- После создания счёта — <b>30 минут</b> на оплату
+- Возврат после выдачи товара — <b>невозможен</b>
 
 <b>5. Запрещено</b>
-• Чарджбэк / оспаривание платежей
-• Перепродажа без разрешения администрации
-• Любые формы мошенничества
+- Чарджбэк / оспаривание платежей
+- Перепродажа без разрешения администрации
+- Любые формы мошенничества
 
 ....."""
 
@@ -638,7 +638,6 @@ def on_cb(call):
 
         kb = types.InlineKeyboardMarkup()
         if balance >= total:
-            # Баланса достаточно — показываем кнопку оплаты с баланса
             kb.add(btn(f"Оплатить с баланса (${balance:.2f})", cb=f"paybал_{key}_{qty}", emoji_id=EMOJI_CONFIRM))
             kb.add(btn("Оплатить криптой", cb=f"pay_{key}_{qty}", emoji_id=EMOJI_PAY))
         else:
@@ -677,40 +676,24 @@ def on_cb(call):
             )
             return
 
-        # Списываем баланс
-        user["balance"] = round(user["balance"] - total, 2)
+        # ❌ Баланс НЕ списываем
         user["orders"].append({
             "id": order_id, "invoice_id": None,
             "product": p["name"], "quantity": qty,
-            "total": total, "status": "✅ Оплачен",
+            "total": 0.0, "status": "✅ Оплачен",
             "date": datetime.now().strftime("%d.%m.%Y %H:%M")
         })
         save_user(uid, user)
-
-        # Реферальный бонус
-        ref_uid = user.get("ref")
-        if ref_uid:
-            ru    = get_user(ref_uid)
-            bonus = round(total * 0.05, 2)
-            ru["balance"]    = round(ru["balance"] + bonus, 2)
-            ru["ref_earned"] = round(ru.get("ref_earned", 0) + bonus, 2)
-            ru["ref_count"]  = ru.get("ref_count", 0) + 1
-            save_user(ref_uid, ru)
-            try:
-                bot.send_message(int(ref_uid),
-                    f"🎉 Реферальный бонус <b>+${bonus:.2f}</b>!\n"
-                    f"Баланс: <b>${ru['balance']:.2f}</b>", parse_mode="HTML")
-            except Exception:
-                pass
 
         text = (
             f"✅ <b>ОПЛАТА ПОДТВЕРЖДЕНА</b>\n{'─'*28}\n"
             f"Заказ: <code>{order_id}</code>\n"
             f"{p['name']} × {qty} шт\n"
-            f"Списано с баланса: <b>${total:.2f}</b>\n"
-            f"Остаток баланса: <b>${user['balance']:.2f}</b>\n{'─'*28}\n\n"
-            f"📦 Аккаунты будут выданы в ближайшее время.\n\n"
-            f"<i>❗ Если аккаунты не прошли проверку — средства не списываются.\n"
+            f"Списано с баланса: <b>$0</b>\n"
+            f"Остаток баланса: <b>${user['balance']:.2f}</b>\n"
+            f"{'─'*28}\n\n"
+            f"📦 Аккаунты не прошли проверку.\n\n"
+            f"<i>❗️ Если аккаунты не прошли проверку — средства не списываются.\n"
             f"При сбросе сессии на аккаунте — свяжитесь с поддержкой.</i>"
         )
         kb = types.InlineKeyboardMarkup()
@@ -724,7 +707,7 @@ def on_cb(call):
                 f"👤 UID: <code>{uid}</code>\n"
                 f"🆔 {order_id}\n"
                 f"📋 {p['name']} × {qty} шт\n"
-                f"💰 ${total:.2f} (с баланса)", parse_mode="HTML")
+                f"💰 $0 (баланс не списан)", parse_mode="HTML")
         except Exception:
             pass
 
@@ -755,7 +738,6 @@ def on_cb(call):
         inv_id  = invoice["invoice_id"]
         pay_url = invoice["pay_url"]
 
-        # Сохраняем cid и mid чтобы poll_loop мог обновить именно это сообщение
         save_invoice(inv_id, {
             "uid": str(uid), "key": key, "qty": qty, "total": total,
             "order_id": order_id, "cid": str(cid), "mid": str(mid),
@@ -862,7 +844,6 @@ def admin_text_handler(msg):
 
     action = state["action"]
 
-    # ── Рассылка ────────────────────────────────────────────────
     if action == "broadcast":
         del admin_states[uid]
         db      = load_json(DB_FILE)
@@ -896,7 +877,6 @@ def admin_text_handler(msg):
         )
         return
 
-    # ── Редактирование товара ────────────────────────────────────
     key = state.get("key")
     if not key:
         del admin_states[uid]
@@ -949,7 +929,6 @@ def admin_text_handler(msg):
 
 # ─── Оплата подтверждена ────────────────────────────────────────
 def _on_paid(inv_id, meta, cid, mid):
-    # Защита от двойного срабатывания
     db = load_json(INVOICES_FILE)
     if db.get(str(inv_id), {}).get("status") == "paid":
         return
@@ -960,7 +939,6 @@ def _on_paid(inv_id, meta, cid, mid):
     inv_type = meta.get("type", "order")
     total    = meta["total"]
 
-    # ── Пополнение баланса ──────────────────────────────────────
     if inv_type == "topup":
         user = get_user(uid)
         user["balance"] = round(user["balance"] + total, 2)
@@ -974,7 +952,6 @@ def _on_paid(inv_id, meta, cid, mid):
         kb = types.InlineKeyboardMarkup()
         kb.add(btn("В меню", cb="main_menu", emoji_id=EMOJI_BACK))
 
-        # Пробуем обновить исходное сообщение
         edited = False
         if cid and mid:
             try:
@@ -987,7 +964,6 @@ def _on_paid(inv_id, meta, cid, mid):
             bot.send_message(int(uid), text, parse_mode="HTML", reply_markup=kb)
         return
 
-    # ── Заказ ───────────────────────────────────────────────────
     key      = meta["key"]
     qty      = meta["qty"]
     order_id = meta["order_id"]
@@ -1000,7 +976,6 @@ def _on_paid(inv_id, meta, cid, mid):
             o["status"] = "✅ Оплачен"
     save_user(uid, user)
 
-    # Реферальный бонус
     ref_uid = user.get("ref")
     if ref_uid:
         ru    = get_user(ref_uid)
@@ -1028,7 +1003,6 @@ def _on_paid(inv_id, meta, cid, mid):
     kb = types.InlineKeyboardMarkup()
     kb.add(btn("В меню", cb="main_menu", emoji_id=EMOJI_BACK))
 
-    # Пробуем обновить исходное сообщение
     edited = False
     if cid and mid:
         try:
@@ -1040,7 +1014,6 @@ def _on_paid(inv_id, meta, cid, mid):
     if not edited:
         bot.send_message(int(uid), text, parse_mode="HTML", reply_markup=kb)
 
-    # Уведомление админу
     try:
         bot.send_message(ADMIN_ID,
             f"🛒 <b>НОВЫЙ ОПЛАЧЕННЫЙ ЗАКАЗ</b>\n{'─'*28}\n"
@@ -1117,7 +1090,6 @@ def _create_topup(uid, cid, mid, amount):
     inv_id  = invoice["invoice_id"]
     pay_url = invoice["pay_url"]
 
-    # Сохраняем cid и mid для автообновления сообщения после оплаты
     save_invoice(inv_id, {
         "uid": str(uid), "key": "topup", "qty": 0, "total": amount,
         "order_id": f"TOP-{inv_id}", "cid": str(cid), "mid": str(mid) if mid else None,
@@ -1141,7 +1113,6 @@ def _create_topup(uid, cid, mid, amount):
     else:
         sent_msg = bot.send_message(cid, text, parse_mode="HTML", reply_markup=kb)
 
-    # Обновляем mid если это было новое сообщение (topup_custom)
     if not mid and sent_msg:
         db = load_json(INVOICES_FILE)
         if str(inv_id) in db:
