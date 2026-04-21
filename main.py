@@ -639,10 +639,10 @@ def on_cb(call):
         kb = types.InlineKeyboardMarkup()
         if balance >= total:
             # Баланса достаточно — показываем кнопку оплаты с баланса
-            kb.add(btn(f"✅ Оплатить с баланса (${balance:.2f})", cb=f"paybал_{key}_{qty}", emoji_id=EMOJI_CONFIRM))
-            kb.add(btn("💳 Оплатить криптой", cb=f"pay_{key}_{qty}", emoji_id=EMOJI_PAY))
+            kb.add(btn(f"Оплатить с баланса (${balance:.2f})", cb=f"paybал_{key}_{qty}", emoji_id=EMOJI_CONFIRM))
+            kb.add(btn("Оплатить криптой", cb=f"pay_{key}_{qty}", emoji_id=EMOJI_PAY))
         else:
-            kb.add(btn("💳 Создать счёт", cb=f"pay_{key}_{qty}", emoji_id=EMOJI_CONFIRM))
+            kb.add(btn("Создать счёт", cb=f"pay_{key}_{qty}", emoji_id=EMOJI_CONFIRM))
         kb.add(btn("Отмена", cb="main_menu", emoji_id=EMOJI_CANCEL))
 
         balance_note = f"\n💰 Ваш баланс: <b>${balance:.2f}</b>" + (
@@ -773,7 +773,7 @@ def on_cb(call):
         save_user(uid, user)
 
         kb = types.InlineKeyboardMarkup()
-        kb.add(btn("💳 Оплатить", url=pay_url, emoji_id=EMOJI_PAY))
+        kb.add(btn("Оплатить", url=pay_url, emoji_id=EMOJI_PAY))
         kb.add(btn("В меню",      cb="main_menu", emoji_id=EMOJI_BACK))
 
         bot.edit_message_text(
