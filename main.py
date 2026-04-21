@@ -28,7 +28,6 @@ EMOJI_RULES    = "5258185631355378853"
 EMOJI_REF      = "5258513401784573443"
 EMOJI_BACK     = "6039539366177541657"
 EMOJI_PAY      = "5258204546391351475"
-EMOJI_CHECK    = "6030776052345737530"
 EMOJI_CONFIRM  = "5258215846450305872"
 EMOJI_CANCEL   = "6039539366177541657"
 EMOJI_MANUAL   = "6030776052345737530"
@@ -71,7 +70,7 @@ DEFAULT_PRODUCTS = {
     "stream2": {"name": "Живые | Поток 2",         "price": 7.5,  "stock": 0,   "desc": "Премиум живые аккаунты второго потока"},
 }
 
-MIN_ORDER_QTY = 30   # минимальное количество штук
+MIN_ORDER_QTY = 30
 ASSET         = "USDT"
 
 # ─── БД ─────────────────────────────────────────────────────────
@@ -79,7 +78,6 @@ DB_FILE        = "users_db.json"
 INVOICES_FILE  = "invoices_db.json"
 PRODUCTS_FILE  = "products_db.json"
 
-# Отдельные локи для каждого файла, чтобы избежать race condition
 _file_locks = {
     DB_FILE:       threading.Lock(),
     INVOICES_FILE: threading.Lock(),
@@ -94,7 +92,6 @@ def load_json(path):
     with lock:
         if not os.path.exists(path):
             return {}
-        # Сначала пробуем основной файл
         try:
             with open(path, "r", encoding="utf-8") as f:
                 content = f.read().strip()
@@ -103,7 +100,6 @@ def load_json(path):
                 return json.loads(content)
         except (json.JSONDecodeError, ValueError, IOError):
             pass
-        # Если основной повреждён — пробуем бэкап
         backup = path + ".bak"
         if os.path.exists(backup):
             try:
@@ -124,17 +120,14 @@ def save_json(path, data):
         dir_name = os.path.dirname(os.path.abspath(path))
         tmp_path = None
         try:
-            # Пишем во временный файл
             fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
-            # Бэкап текущего файла перед заменой
             if os.path.exists(path):
                 try:
                     os.replace(path, path + ".bak")
                 except Exception:
                     pass
-            # Атомарная замена
             os.replace(tmp_path, path)
         except Exception as e:
             print(f"❌ Ошибка записи {path}: {e}")
@@ -167,13 +160,11 @@ def save_user(uid, data):
     db[str(uid)] = data
     save_json(DB_FILE, db)
 
-# ─── Сохранение username при каждом взаимодействии ──────────────
 def update_username(user_obj):
-    """Обновляет username пользователя в БД при каждом клике."""
     if not user_obj:
         return
     uid      = user_obj.id
-    username = user_obj.username  # может быть None если нет username
+    username = user_obj.username
     db       = load_json(DB_FILE)
     key      = str(uid)
     if key not in db:
@@ -182,20 +173,12 @@ def update_username(user_obj):
     save_json(DB_FILE, db)
 
 def find_user_by_username_or_id(query):
-    """
-    Ищет пользователя по username (с @ или без) или по числовому ID.
-    Возвращает (uid_str, user_data) или (None, None).
-    """
     db = load_json(DB_FILE)
-
-    # Если передан числовой ID
     if query.lstrip("-").isdigit():
         key = str(query)
         if key in db:
             return key, db[key]
         return None, None
-
-    # Поиск по username
     target = query.lstrip("@").lower()
     for uid_str, udata in db.items():
         uname = udata.get("username")
@@ -219,7 +202,7 @@ def btn(text, cb=None, url=None, emoji_id=None):
     return types.InlineKeyboardButton(text=text, **kwargs)
 
 # ─── Состояния админа ────────────────────────────────────────────
-admin_states = {}   # uid -> {"action": ..., "key": ...}
+admin_states = {}
 
 # ─── Клавиатуры ─────────────────────────────────────────────────
 def main_kb():
@@ -262,7 +245,7 @@ def admin_kb():
     kb.add(btn("📊 Статистика",    cb="admin_stats"))
     kb.add(btn("📋 Все заказы",    cb="admin_orders"))
     kb.add(btn("👥 Все юзеры",     cb="admin_users"))
-    kb.add(btn("📣 Рассылка",      cb="admin_broadcast"))   # ← НОВОЕ
+    kb.add(btn("📣 Рассылка",      cb="admin_broadcast"))
     kb.add(btn("🚪 Выйти из панели", cb="admin_exit"))
     return kb
 
@@ -272,6 +255,11 @@ def admin_product_kb(key):
         btn("💲 Изменить цену",      cb=f"admin_price_{key}"),
         btn("📦 Изменить остаток",   cb=f"admin_stock_{key}"),
     )
+    kb.add(btn("◀️ Назад к панели", cb="admin_main"))
+    return kb
+
+def admin_back_kb():
+    kb = types.InlineKeyboardMarkup()
     kb.add(btn("◀️ Назад к панели", cb="admin_main"))
     return kb
 
@@ -369,7 +357,7 @@ REFERRAL_TEXT = """<tg-emoji emoji-id="5258513401784573443">🎯</tg-emoji> <b>�
 @bot.message_handler(commands=["start"])
 def cmd_start(msg):
     uid  = msg.from_user.id
-    update_username(msg.from_user)   # ← сохраняем username
+    update_username(msg.from_user)
     args = msg.text.split()
     if len(args) > 1 and args[1] != str(uid):
         user = get_user(uid)
@@ -393,7 +381,6 @@ def cmd_admin(msg):
     )
 
 # ─── /add — выдача баланса ───────────────────────────────────────
-# Использование: /add @username 50   или   /add 123456789 50
 @bot.message_handler(commands=["add"])
 def cmd_add(msg):
     uid = msg.from_user.id
@@ -447,7 +434,6 @@ def cmd_add(msg):
         parse_mode="HTML"
     )
 
-    # Уведомить пользователя
     try:
         bot.send_message(
             int(target_uid),
@@ -468,7 +454,7 @@ def on_cb(call):
     data = call.data
     bot.answer_callback_query(call.id)
 
-    update_username(call.from_user)   # ← сохраняем username при каждом клике
+    update_username(call.from_user)
 
     # ── Админ-панель ────────────────────────────────────────────
     if data == "admin_main":
@@ -538,8 +524,8 @@ def on_cb(call):
         if uid != ADMIN_ID: return
         db       = load_json(DB_FILE)
         inv_db   = load_json(INVOICES_FILE)
-        total_users  = len(db)
-        paid_orders  = sum(1 for v in inv_db.values() if v.get("status") == "paid" and v.get("type") == "order")
+        total_users   = len(db)
+        paid_orders   = sum(1 for v in inv_db.values() if v.get("status") == "paid" and v.get("type") == "order")
         total_revenue = sum(v.get("total", 0) for v in inv_db.values() if v.get("status") == "paid")
         PRODUCTS = get_products()
         stock_text = "\n".join(
@@ -646,19 +632,101 @@ def on_cb(call):
         qty      = int(qty_s)
         PRODUCTS = get_products()
         p        = PRODUCTS[key]
-        kb       = types.InlineKeyboardMarkup()
-        kb.add(
-            btn("Создать счёт", cb=f"pay_{key}_{qty}", emoji_id=EMOJI_CONFIRM),
-            btn("Отмена",       cb="main_menu",        emoji_id=EMOJI_CANCEL),
+        total    = qty * p["price"]
+        user     = get_user(uid)
+        balance  = user.get("balance", 0.0)
+
+        kb = types.InlineKeyboardMarkup()
+        if balance >= total:
+            # Баланса достаточно — показываем кнопку оплаты с баланса
+            kb.add(btn(f"✅ Оплатить с баланса (${balance:.2f})", cb=f"paybал_{key}_{qty}", emoji_id=EMOJI_CONFIRM))
+            kb.add(btn("💳 Оплатить криптой", cb=f"pay_{key}_{qty}", emoji_id=EMOJI_PAY))
+        else:
+            kb.add(btn("💳 Создать счёт", cb=f"pay_{key}_{qty}", emoji_id=EMOJI_CONFIRM))
+        kb.add(btn("Отмена", cb="main_menu", emoji_id=EMOJI_CANCEL))
+
+        balance_note = f"\n💰 Ваш баланс: <b>${balance:.2f}</b>" + (
+            f" ✅ <i>(достаточно)</i>" if balance >= total else f" ❌ <i>(не хватает ${total - balance:.2f})</i>"
         )
         bot.edit_message_text(
             f"<b>✅ ПОДТВЕРЖДЕНИЕ</b>\n{'─'*28}\n"
             f"Товар: <b>{p['name']}</b>\n"
             f"Кол-во: <b>{qty} шт</b>\n"
             f"Цена: <b>${p['price']:.2f}/шт</b>\n{'─'*28}\n"
-            f"💰 Итого: <b>${qty * p['price']:.2f} {ASSET}</b>",
+            f"💰 Итого: <b>${total:.2f} {ASSET}</b>"
+            f"{balance_note}",
             cid, mid, parse_mode="HTML", reply_markup=kb
         )
+
+    elif data.startswith("paybал_"):
+        # Оплата с внутреннего баланса
+        _, key, qty_s = data.split("_", 2)
+        qty      = int(qty_s)
+        PRODUCTS = get_products()
+        p        = PRODUCTS[key]
+        total    = qty * p["price"]
+        order_id = f"ORD-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+
+        user = get_user(uid)
+        if user["balance"] < total:
+            bot.edit_message_text(
+                f"❌ <b>Недостаточно средств</b>\n\n"
+                f"Нужно: <b>${total:.2f}</b>\n"
+                f"Ваш баланс: <b>${user['balance']:.2f}</b>",
+                cid, mid, parse_mode="HTML", reply_markup=back_kb()
+            )
+            return
+
+        # Списываем баланс
+        user["balance"] = round(user["balance"] - total, 2)
+        user["orders"].append({
+            "id": order_id, "invoice_id": None,
+            "product": p["name"], "quantity": qty,
+            "total": total, "status": "✅ Оплачен",
+            "date": datetime.now().strftime("%d.%m.%Y %H:%M")
+        })
+        save_user(uid, user)
+
+        # Реферальный бонус
+        ref_uid = user.get("ref")
+        if ref_uid:
+            ru    = get_user(ref_uid)
+            bonus = round(total * 0.05, 2)
+            ru["balance"]    = round(ru["balance"] + bonus, 2)
+            ru["ref_earned"] = round(ru.get("ref_earned", 0) + bonus, 2)
+            ru["ref_count"]  = ru.get("ref_count", 0) + 1
+            save_user(ref_uid, ru)
+            try:
+                bot.send_message(int(ref_uid),
+                    f"🎉 Реферальный бонус <b>+${bonus:.2f}</b>!\n"
+                    f"Баланс: <b>${ru['balance']:.2f}</b>", parse_mode="HTML")
+            except Exception:
+                pass
+
+        text = (
+            f"✅ <b>ОПЛАТА ПОДТВЕРЖДЕНА</b>\n{'─'*28}\n"
+            f"Заказ: <code>{order_id}</code>\n"
+            f"{p['name']} × {qty} шт\n"
+            f"Списано с баланса: <b>${total:.2f}</b>\n"
+            f"Остаток баланса: <b>${user['balance']:.2f}</b>\n{'─'*28}\n\n"
+            f"📦 Аккаунты будут выданы в ближайшее время.\n\n"
+            f"<i>❗ Если аккаунты не прошли проверку — средства не списываются.\n"
+            f"При сбросе сессии на аккаунте — свяжитесь с поддержкой.</i>"
+        )
+        kb = types.InlineKeyboardMarkup()
+        kb.add(btn("В меню", cb="main_menu", emoji_id=EMOJI_BACK))
+        bot.edit_message_text(text, cid, mid, parse_mode="HTML", reply_markup=kb)
+
+        # Уведомление админу
+        try:
+            bot.send_message(ADMIN_ID,
+                f"🛒 <b>НОВЫЙ ЗАКАЗ (с баланса)</b>\n{'─'*28}\n"
+                f"👤 UID: <code>{uid}</code>\n"
+                f"🆔 {order_id}\n"
+                f"📋 {p['name']} × {qty} шт\n"
+                f"💰 ${total:.2f} (с баланса)", parse_mode="HTML")
+        except Exception:
+            pass
 
     elif data.startswith("pay_"):
         _, key, qty_s = data.split("_", 2)
@@ -687,9 +755,10 @@ def on_cb(call):
         inv_id  = invoice["invoice_id"]
         pay_url = invoice["pay_url"]
 
+        # Сохраняем cid и mid чтобы poll_loop мог обновить именно это сообщение
         save_invoice(inv_id, {
             "uid": str(uid), "key": key, "qty": qty, "total": total,
-            "order_id": order_id, "cid": cid, "mid": mid,
+            "order_id": order_id, "cid": str(cid), "mid": str(mid),
             "status": "active", "type": "order",
             "created": datetime.now().isoformat()
         })
@@ -704,9 +773,8 @@ def on_cb(call):
         save_user(uid, user)
 
         kb = types.InlineKeyboardMarkup()
-        kb.add(btn("Оплатить",          url=pay_url,            emoji_id=EMOJI_PAY))
-        kb.add(btn("Проверить оплату",  cb=f"check_{inv_id}",   emoji_id=EMOJI_CHECK))
-        kb.add(btn("В меню",            cb="main_menu",         emoji_id=EMOJI_BACK))
+        kb.add(btn("💳 Оплатить", url=pay_url, emoji_id=EMOJI_PAY))
+        kb.add(btn("В меню",      cb="main_menu", emoji_id=EMOJI_BACK))
 
         bot.edit_message_text(
             f"<b>🎯 СЧЁТ СОЗДАН</b>\n{'─'*28}\n"
@@ -718,30 +786,6 @@ def on_cb(call):
             f"⏱ Счёт действителен <b>30 минут</b>",
             cid, mid, parse_mode="HTML", reply_markup=kb
         )
-
-    elif data.startswith("check_"):
-        inv_id = int(data[6:])
-        meta   = get_inv_meta(inv_id)
-        if not meta:
-            bot.answer_callback_query(call.id, "❌ Инвойс не найден", show_alert=True)
-            return
-        if meta.get("status") == "paid":
-            bot.answer_callback_query(call.id, "✅ Уже оплачен!", show_alert=True)
-            return
-        bot.answer_callback_query(call.id, "⏳ Проверяю...")
-        try:
-            inv = crypto.check_invoice(inv_id)
-        except Exception as e:
-            bot.answer_callback_query(call.id, f"Ошибка: {e}", show_alert=True)
-            return
-        status = inv.get("status") if inv else "not_found"
-        if status == "paid":
-            _on_paid(inv_id, meta, cid, mid)
-        elif status == "expired":
-            bot.edit_message_text("❌ <b>Счёт истёк</b>\n\nСоздайте новый заказ.",
-                                  cid, mid, parse_mode="HTML", reply_markup=back_kb())
-        else:
-            bot.answer_callback_query(call.id, "⏳ Оплата ещё не поступила", show_alert=True)
 
     elif data == "topup":
         kb = types.InlineKeyboardMarkup(row_width=3)
@@ -805,12 +849,6 @@ def on_cb(call):
         )
         bot.edit_message_text(text, cid, mid, parse_mode="HTML", reply_markup=back_kb())
 
-# ─── Вспомогательные клавиатуры ─────────────────────────────────
-def admin_back_kb():
-    kb = types.InlineKeyboardMarkup()
-    kb.add(btn("◀️ Назад к панели", cb="admin_main"))
-    return kb
-
 # ─── Обработка текстовых и медиа сообщений от админа ────────────
 @bot.message_handler(
     content_types=["text", "photo"],
@@ -846,7 +884,7 @@ def admin_text_handler(msg):
                 success += 1
             except Exception:
                 failed += 1
-            time.sleep(0.05)   # Небольшая задержка чтобы не получить flood
+            time.sleep(0.05)
 
         bot.send_message(
             uid,
@@ -875,7 +913,7 @@ def admin_text_handler(msg):
         try:
             new_price = float(text.replace(",", "."))
             if new_price <= 0: raise ValueError
-        except:
+        except Exception:
             bot.send_message(uid, "❌ Некорректная цена. Введите число > 0 (например: 5.5)")
             return
         old_price              = p["price"]
@@ -894,7 +932,7 @@ def admin_text_handler(msg):
         try:
             new_stock = int(text)
             if new_stock < 0: raise ValueError
-        except:
+        except Exception:
             bot.send_message(uid, "❌ Некорректный остаток. Введите целое число ≥ 0")
             return
         old_stock              = p["stock"]
@@ -911,32 +949,45 @@ def admin_text_handler(msg):
 
 # ─── Оплата подтверждена ────────────────────────────────────────
 def _on_paid(inv_id, meta, cid, mid):
+    # Защита от двойного срабатывания
     db = load_json(INVOICES_FILE)
     if db.get(str(inv_id), {}).get("status") == "paid":
         return
     db[str(inv_id)]["status"] = "paid"
     save_json(INVOICES_FILE, db)
 
-    uid      = meta["uid"]
+    uid      = str(meta["uid"])
     inv_type = meta.get("type", "order")
     total    = meta["total"]
 
+    # ── Пополнение баланса ──────────────────────────────────────
     if inv_type == "topup":
         user = get_user(uid)
         user["balance"] = round(user["balance"] + total, 2)
         save_user(uid, user)
+
         text = (
             f"✅ <b>Баланс пополнен!</b>\n{'─'*28}\n"
             f"💰 +${total:.2f} {ASSET}\n"
             f"Ваш баланс: <b>${user['balance']:.2f}</b>"
         )
-        if mid:
-            try: bot.edit_message_text(text, cid, mid, parse_mode="HTML", reply_markup=back_kb())
-            except: bot.send_message(cid, text, parse_mode="HTML", reply_markup=back_kb())
-        else:
-            bot.send_message(cid, text, parse_mode="HTML", reply_markup=back_kb())
+        kb = types.InlineKeyboardMarkup()
+        kb.add(btn("В меню", cb="main_menu", emoji_id=EMOJI_BACK))
+
+        # Пробуем обновить исходное сообщение
+        edited = False
+        if cid and mid:
+            try:
+                bot.edit_message_text(text, int(cid), int(mid),
+                                      parse_mode="HTML", reply_markup=kb)
+                edited = True
+            except Exception:
+                pass
+        if not edited:
+            bot.send_message(int(uid), text, parse_mode="HTML", reply_markup=kb)
         return
 
+    # ── Заказ ───────────────────────────────────────────────────
     key      = meta["key"]
     qty      = meta["qty"]
     order_id = meta["order_id"]
@@ -962,21 +1013,34 @@ def _on_paid(inv_id, meta, cid, mid):
             bot.send_message(int(ref_uid),
                 f"🎉 Реферальный бонус <b>+${bonus:.2f}</b>!\n"
                 f"Баланс: <b>${ru['balance']:.2f}</b>", parse_mode="HTML")
-        except: pass
+        except Exception:
+            pass
 
     text = (
         f"✅ <b>ОПЛАТА ПОДТВЕРЖДЕНА</b>\n{'─'*28}\n"
         f"Заказ: <code>{order_id}</code>\n"
         f"{p.get('name', key)} × {qty} шт\n"
         f"Оплачено: <b>${total:.2f} {ASSET}</b>\n{'─'*28}\n\n"
-        f"📦 Аккаунты будут выданы в ближайшее время."
+        f"📦 Аккаунты будут выданы в ближайшее время.\n\n"
+        f"<i>❗ Если аккаунты не прошли проверку — средства не списываются.\n"
+        f"При сбросе сессии на аккаунте — свяжитесь с поддержкой.</i>"
     )
-    if mid:
-        try: bot.edit_message_text(text, cid, mid, parse_mode="HTML", reply_markup=back_kb())
-        except: bot.send_message(int(uid), text, parse_mode="HTML", reply_markup=back_kb())
-    else:
-        bot.send_message(int(uid), text, parse_mode="HTML", reply_markup=back_kb())
+    kb = types.InlineKeyboardMarkup()
+    kb.add(btn("В меню", cb="main_menu", emoji_id=EMOJI_BACK))
 
+    # Пробуем обновить исходное сообщение
+    edited = False
+    if cid and mid:
+        try:
+            bot.edit_message_text(text, int(cid), int(mid),
+                                  parse_mode="HTML", reply_markup=kb)
+            edited = True
+        except Exception:
+            pass
+    if not edited:
+        bot.send_message(int(uid), text, parse_mode="HTML", reply_markup=kb)
+
+    # Уведомление админу
     try:
         bot.send_message(ADMIN_ID,
             f"🛒 <b>НОВЫЙ ОПЛАЧЕННЫЙ ЗАКАЗ</b>\n{'─'*28}\n"
@@ -985,7 +1049,8 @@ def _on_paid(inv_id, meta, cid, mid):
             f"📋 {p.get('name', key)} × {qty} шт\n"
             f"💰 ${total:.2f} {ASSET}\n"
             f"🔖 Invoice: <code>{inv_id}</code>", parse_mode="HTML")
-    except: pass
+    except Exception:
+        pass
 
 # ─── Next step handlers ─────────────────────────────────────────
 def step_qty(msg, key, cid):
@@ -996,30 +1061,40 @@ def step_qty(msg, key, cid):
     try:
         qty = int(msg.text.strip())
         assert min_qty <= qty <= p["stock"]
-    except:
+    except Exception:
         m = bot.send_message(cid,
             f"❌ Введите число от {min_qty} до {p['stock']}:",
             reply_markup=back_kb())
         bot.register_next_step_handler(m, step_qty, key, cid)
         return
-    total = qty * p["price"]
+    total   = qty * p["price"]
+    user    = get_user(uid)
+    balance = user.get("balance", 0.0)
+
     kb = types.InlineKeyboardMarkup()
-    kb.add(
-        btn("Создать счёт", cb=f"pay_{key}_{qty}", emoji_id=EMOJI_CONFIRM),
-        btn("Отмена",       cb="main_menu",        emoji_id=EMOJI_CANCEL),
+    if balance >= total:
+        kb.add(btn(f"Оплатить с баланса (${balance:.2f})", cb=f"paybал_{key}_{qty}", emoji_id=EMOJI_CONFIRM))
+        kb.add(btn("Оплатить @send", cb=f"pay_{key}_{qty}", emoji_id=EMOJI_PAY))
+    else:
+        kb.add(btn("Создать счёт", cb=f"pay_{key}_{qty}", emoji_id=EMOJI_CONFIRM))
+    kb.add(btn("Отмена", cb="main_menu", emoji_id=EMOJI_CANCEL))
+
+    balance_note = f"\n💰 Ваш баланс: <b>${balance:.2f}</b>" + (
+        " ✅ <i>(достаточно)</i>" if balance >= total else f" ❌ <i>(не хватает ${total - balance:.2f})</i>"
     )
     bot.send_message(cid,
         f"<b>✅ ПОДТВЕРЖДЕНИЕ</b>\n{'─'*28}\n"
         f"Товар: <b>{p['name']}</b>\n"
         f"Кол-во: <b>{qty} шт</b>\n"
-        f"Итого: <b>${total:.2f} {ASSET}</b>",
+        f"Итого: <b>${total:.2f} {ASSET}</b>"
+        f"{balance_note}",
         parse_mode="HTML", reply_markup=kb)
 
 def step_topup(msg, cid):
     try:
         amount = float(msg.text.strip().replace("$", "").replace(",", "."))
         if amount < 10: raise ValueError
-    except:
+    except Exception:
         m = bot.send_message(cid, "❌ Введите корректную сумму (мин. $10):", reply_markup=back_kb())
         bot.register_next_step_handler(m, step_topup, cid)
         return
@@ -1042,17 +1117,17 @@ def _create_topup(uid, cid, mid, amount):
     inv_id  = invoice["invoice_id"]
     pay_url = invoice["pay_url"]
 
+    # Сохраняем cid и mid для автообновления сообщения после оплаты
     save_invoice(inv_id, {
         "uid": str(uid), "key": "topup", "qty": 0, "total": amount,
-        "order_id": f"TOP-{inv_id}", "cid": cid, "mid": mid,
+        "order_id": f"TOP-{inv_id}", "cid": str(cid), "mid": str(mid) if mid else None,
         "status": "active", "type": "topup",
         "created": datetime.now().isoformat()
     })
 
     kb = types.InlineKeyboardMarkup()
-    kb.add(btn("Оплатить",          url=pay_url,            emoji_id=EMOJI_PAY))
-    kb.add(btn("Проверить оплату",  cb=f"check_{inv_id}",   emoji_id=EMOJI_CHECK))
-    kb.add(btn("В меню",            cb="main_menu",         emoji_id=EMOJI_BACK))
+    kb.add(btn("Оплатить", url=pay_url, emoji_id=EMOJI_PAY))
+    kb.add(btn("В меню",      cb="main_menu", emoji_id=EMOJI_BACK))
 
     text = (
         f"<b>💳 СЧЁТ НА ПОПОЛНЕНИЕ</b>\n{'─'*28}\n"
@@ -1061,13 +1136,23 @@ def _create_topup(uid, cid, mid, amount):
         f"⚡ Оплата фиксируется <b>автоматически</b>\n"
         f"⏱ Счёт действителен <b>30 минут</b>"
     )
-    if mid: bot.edit_message_text(text, cid, mid, parse_mode="HTML", reply_markup=kb)
-    else:   bot.send_message(cid, text, parse_mode="HTML", reply_markup=kb)
+    if mid:
+        sent_msg = bot.edit_message_text(text, cid, mid, parse_mode="HTML", reply_markup=kb)
+    else:
+        sent_msg = bot.send_message(cid, text, parse_mode="HTML", reply_markup=kb)
+
+    # Обновляем mid если это было новое сообщение (topup_custom)
+    if not mid and sent_msg:
+        db = load_json(INVOICES_FILE)
+        if str(inv_id) in db:
+            db[str(inv_id)]["mid"] = str(sent_msg.message_id)
+            db[str(inv_id)]["cid"] = str(sent_msg.chat.id)
+            save_json(INVOICES_FILE, db)
 
 # ─── Фоновый поллинг ────────────────────────────────────────────
 def poll_loop():
     while True:
-        time.sleep(2)
+        time.sleep(3)
         try:
             db = load_json(INVOICES_FILE)
             for inv_id_s, meta in list(db.items()):
@@ -1076,8 +1161,8 @@ def poll_loop():
                 try:
                     inv = crypto.check_invoice(int(inv_id_s))
                     if inv and inv.get("status") == "paid":
-                        cid = int(meta.get("cid", 0))
-                        mid = meta.get("mid", 0)
+                        cid = meta.get("cid")
+                        mid = meta.get("mid")
                         _on_paid(int(inv_id_s), meta, cid, mid)
                 except Exception as e:
                     print(f"⚠️  Ошибка проверки инвойса {inv_id_s}: {e}")
