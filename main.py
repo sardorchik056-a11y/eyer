@@ -77,11 +77,13 @@ ASSET         = "USDT"
 DB_FILE        = "users_db.json"
 INVOICES_FILE  = "invoices_db.json"
 PRODUCTS_FILE  = "products_db.json"
+BANNED_FILE    = "banned_db.json"
 
 _file_locks = {
     DB_FILE:       threading.Lock(),
     INVOICES_FILE: threading.Lock(),
     PRODUCTS_FILE: threading.Lock(),
+    BANNED_FILE:   threading.Lock(),
 }
 
 def _get_lock(path):
@@ -193,6 +195,23 @@ def save_invoice(inv_id, meta):
 
 def get_inv_meta(inv_id):
     return load_json(INVOICES_FILE).get(str(inv_id))
+
+# ─── Бан/разбан ─────────────────────────────────────────────────
+def get_banned():
+    return load_json(BANNED_FILE)
+
+def is_banned(uid):
+    return str(uid) in get_banned()
+
+def ban_user(uid):
+    db = get_banned()
+    db[str(uid)] = {"banned_at": datetime.now().isoformat()}
+    save_json(BANNED_FILE, db)
+
+def unban_user(uid):
+    db = get_banned()
+    db.pop(str(uid), None)
+    save_json(BANNED_FILE, db)
 
 def btn(text, cb=None, url=None, emoji_id=None):
     kwargs = {}
@@ -356,7 +375,9 @@ REFERRAL_TEXT = """<tg-emoji emoji-id="5258513401784573443">🎯</tg-emoji> <b>�
 # ─── /start ─────────────────────────────────────────────────────
 @bot.message_handler(commands=["start"])
 def cmd_start(msg):
-    uid  = msg.from_user.id
+    uid = msg.from_user.id
+    if is_banned(uid):
+        return
     update_username(msg.from_user)
     args = msg.text.split()
     if len(args) > 1 and args[1] != str(uid):
@@ -445,6 +466,112 @@ def cmd_add(msg):
     except Exception:
         pass
 
+# ─── /ban — блокировка пользователя ────────────────────────────
+@bot.message_handler(commands=["ban"])
+def cmd_ban(msg):
+    uid = msg.from_user.id
+    if uid != ADMIN_ID:
+        bot.send_message(msg.chat.id, "❌ Нет доступа.")
+        return
+
+    parts = msg.text.strip().split()
+    if len(parts) != 2:
+        bot.send_message(
+            msg.chat.id,
+            "❌ Неверный формат.\n\nИспользование:\n"
+            "<code>/ban @username</code>\n"
+            "<code>/ban 123456789</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    target_query = parts[1]
+    target_uid, target_data = find_user_by_username_or_id(target_query)
+
+    if not target_uid:
+        bot.send_message(
+            msg.chat.id,
+            f"❌ Пользователь <code>{target_query}</code> не найден в базе.",
+            parse_mode="HTML"
+        )
+        return
+
+    if int(target_uid) == ADMIN_ID:
+        bot.send_message(msg.chat.id, "❌ Нельзя заблокировать администратора.")
+        return
+
+    if is_banned(target_uid):
+        uname_display = f"@{target_data['username']}" if target_data.get("username") else f"ID {target_uid}"
+        bot.send_message(
+            msg.chat.id,
+            f"⚠️ Пользователь {uname_display} уже заблокирован.",
+            parse_mode="HTML"
+        )
+        return
+
+    ban_user(target_uid)
+    uname_display = f"@{target_data['username']}" if target_data.get("username") else f"ID {target_uid}"
+    bot.send_message(
+        msg.chat.id,
+        f"🚫 Пользователь {uname_display} (<code>{target_uid}</code>) заблокирован.\n"
+        f"Бот будет полностью игнорировать его сообщения.",
+        parse_mode="HTML"
+    )
+
+# ─── /unban — разблокировка пользователя ───────────────────────
+@bot.message_handler(commands=["unban"])
+def cmd_unban(msg):
+    uid = msg.from_user.id
+    if uid != ADMIN_ID:
+        bot.send_message(msg.chat.id, "❌ Нет доступа.")
+        return
+
+    parts = msg.text.strip().split()
+    if len(parts) != 2:
+        bot.send_message(
+            msg.chat.id,
+            "❌ Неверный формат.\n\nИспользование:\n"
+            "<code>/unban @username</code>\n"
+            "<code>/unban 123456789</code>",
+            parse_mode="HTML"
+        )
+        return
+
+    target_query = parts[1]
+    target_uid, target_data = find_user_by_username_or_id(target_query)
+
+    if not target_uid:
+        # Попробуем найти только по ID в banned_db, даже если нет в users_db
+        raw = target_query.lstrip("@")
+        if raw.isdigit() and str(raw) in get_banned():
+            target_uid = str(raw)
+            target_data = {}
+        else:
+            bot.send_message(
+                msg.chat.id,
+                f"❌ Пользователь <code>{target_query}</code> не найден.",
+                parse_mode="HTML"
+            )
+            return
+
+    if not is_banned(target_uid):
+        uname_display = f"@{target_data.get('username')}" if target_data and target_data.get("username") else f"ID {target_uid}"
+        bot.send_message(
+            msg.chat.id,
+            f"⚠️ Пользователь {uname_display} не заблокирован.",
+            parse_mode="HTML"
+        )
+        return
+
+    unban_user(target_uid)
+    uname_display = f"@{target_data.get('username')}" if target_data and target_data.get("username") else f"ID {target_uid}"
+    bot.send_message(
+        msg.chat.id,
+        f"✅ Пользователь {uname_display} (<code>{target_uid}</code>) разблокирован.\n"
+        f"Бот снова будет отвечать на его сообщения.",
+        parse_mode="HTML"
+    )
+
 # ─── Callbacks ──────────────────────────────────────────────────
 @bot.callback_query_handler(func=lambda c: True)
 def on_cb(call):
@@ -453,6 +580,10 @@ def on_cb(call):
     mid  = call.message.message_id
     data = call.data
     bot.answer_callback_query(call.id)
+
+    # Проверка бана
+    if is_banned(uid):
+        return
 
     update_username(call.from_user)
 
@@ -527,6 +658,7 @@ def on_cb(call):
         total_users   = len(db)
         paid_orders   = sum(1 for v in inv_db.values() if v.get("status") == "paid" and v.get("type") == "order")
         total_revenue = sum(v.get("total", 0) for v in inv_db.values() if v.get("status") == "paid")
+        banned_count  = len(get_banned())
         PRODUCTS = get_products()
         stock_text = "\n".join(
             f"  • {p['name']}: <b>{p['stock']} шт</b>"
@@ -535,6 +667,7 @@ def on_cb(call):
         bot.edit_message_text(
             f"<b>📊 СТАТИСТИКА</b>\n{'─'*28}\n"
             f"👥 Пользователей: <b>{total_users}</b>\n"
+            f"🚫 Заблокировано: <b>{banned_count}</b>\n"
             f"🛒 Оплаченных заказов: <b>{paid_orders}</b>\n"
             f"💰 Общая выручка: <b>${total_revenue:.2f}</b>\n\n"
             f"<b>Остатки на складе:</b>\n{stock_text}",
@@ -565,11 +698,13 @@ def on_cb(call):
     elif data == "admin_users":
         if uid != ADMIN_ID: return
         db = load_json(DB_FILE)
+        banned = get_banned()
         text = f"<b>👥 ВСЕ ПОЛЬЗОВАТЕЛИ</b>\n{'─'*28}\n\n"
         for u_id, u_data in list(db.items())[-20:]:
             uname = f"@{u_data['username']}" if u_data.get("username") else "—"
+            ban_mark = " 🚫" if u_id in banned else ""
             text += (
-                f"👤 <code>{u_id}</code> {uname}  "
+                f"👤 <code>{u_id}</code> {uname}{ban_mark}  "
                 f"💰${u_data.get('balance', 0):.2f}  "
                 f"🛒{len(u_data.get('orders', []))} заказов\n"
             )
@@ -847,11 +982,12 @@ def admin_text_handler(msg):
     if action == "broadcast":
         del admin_states[uid]
         db      = load_json(DB_FILE)
-        uids    = list(db.keys())
+        banned  = get_banned()
+        uids    = [u for u in db.keys() if u not in banned]
         success = 0
         failed  = 0
 
-        bot.send_message(uid, f"⏳ Начинаю рассылку на {len(uids)} пользователей...")
+        bot.send_message(uid, f"⏳ Начинаю рассылку на {len(uids)} пользователей (заблокированные пропущены)...")
 
         for target_uid in uids:
             try:
@@ -1027,7 +1163,9 @@ def _on_paid(inv_id, meta, cid, mid):
 
 # ─── Next step handlers ─────────────────────────────────────────
 def step_qty(msg, key, cid):
-    uid      = msg.from_user.id
+    uid = msg.from_user.id
+    if is_banned(uid):
+        return
     PRODUCTS = get_products()
     p        = PRODUCTS[key]
     min_qty  = MIN_ORDER_QTY
@@ -1064,6 +1202,8 @@ def step_qty(msg, key, cid):
         parse_mode="HTML", reply_markup=kb)
 
 def step_topup(msg, cid):
+    if is_banned(msg.from_user.id):
+        return
     try:
         amount = float(msg.text.strip().replace("$", "").replace(",", "."))
         if amount < 10: raise ValueError
