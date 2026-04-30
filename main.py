@@ -9,7 +9,7 @@ import time
 import tempfile
 
 # ─── Конфиг ─────────────────────────────────────────────────────
-BOT_TOKEN      = "8320997126:AAHyPYlfMWOOgYrTNPZMfF0GOrE_hh7gtcM"
+BOT_TOKEN      = "8559700291:AAEgu7omWYYOiAC2XyCLBR5CE7u0v1Irt1s"
 CRYPTO_TOKEN   = "562214:AABJIaVpSkcIR7FvY7B8Oh3TszuqCUgi0Tk"
 ADMIN_ID       = 8115654734
 CRYPTO_BOT_URL = "https://pay.crypt.bot/api"
