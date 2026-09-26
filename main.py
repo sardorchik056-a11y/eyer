@@ -10,7 +10,9 @@ from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    KeyboardButton,
     Message,
+    ReplyKeyboardMarkup,
 )
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -94,29 +96,42 @@ def main_menu_kb() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text="МАГАЗИН",
                     callback_data="menu_shop",
-                    icon_custom_emoji_id="5920332557466997677",
+                    icon_custom_emoji_id="5208888662451835014",
                 )
             ],
             [
                 InlineKeyboardButton(
                     text="ПРОФИЛЬ",
                     callback_data="menu_profile",
-                    icon_custom_emoji_id="5262690351969215936",
+                    icon_custom_emoji_id="5323442290708985472",
                 ),
                 InlineKeyboardButton(
                     text="ПОДДЕРЖКА",
                     callback_data="menu_support",
-                    icon_custom_emoji_id="5447644880824181073",
+                    icon_custom_emoji_id="5420323339723881652",
                 ),
             ],
             [
                 InlineKeyboardButton(
                     text="ПРАВИЛА",
                     callback_data="menu_rules",
-                    icon_custom_emoji_id="5397797168264260168",
+                    icon_custom_emoji_id="6050643982646513651",
                 )
             ],
         ]
+    )
+
+
+def reply_menu_kb() -> ReplyKeyboardMarkup:
+    # style="primary" — синий цвет кнопок реплай-клавиатуры.
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [
+                KeyboardButton(text="Меню", style="primary"),
+                KeyboardButton(text="Сотрудничество", style="primary"),
+            ]
+        ],
+        resize_keyboard=True,
     )
 
 
@@ -135,7 +150,20 @@ def back_kb() -> InlineKeyboardMarkup:
 @router.message(CommandStart())
 async def cmd_start(message: Message) -> None:
     username = message.from_user.full_name or message.from_user.username or "Гость"
+    await message.answer(welcome_text(username), reply_markup=reply_menu_kb())
+
+
+@router.message(F.text == "Меню")
+async def on_reply_menu(message: Message) -> None:
+    username = message.from_user.full_name or message.from_user.username or "Гость"
     await message.answer(welcome_text(username), reply_markup=main_menu_kb())
+
+
+@router.message(F.text == "Сотрудничество")
+async def on_partnership(message: Message) -> None:
+    await message.answer(
+        "🤝 Раздел «Сотрудничество» в разработке. Скоро здесь появятся условия."
+    )
 
 
 @router.callback_query(F.data == "menu_shop")
