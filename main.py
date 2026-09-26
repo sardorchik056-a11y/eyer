@@ -28,6 +28,8 @@ router = Router()
 # использовать их на inline-кнопках — там всегда обычный юникод-эмодзи.
 # ──────────────────────────────────────────────────────────────────────────
 
+EMOJI_WAVE = '<tg-emoji emoji-id="5413694143601842851">👋</tg-emoji>'
+EMOJI_ROBOT = '<tg-emoji emoji-id="5287684458881756303">🤖</tg-emoji>'
 EMOJI_SHOP = '<tg-emoji emoji-id="5920332557466997677">🏪</tg-emoji>'
 EMOJI_PROFILE = '<tg-emoji emoji-id="5262690351969215936">📃</tg-emoji>'
 EMOJI_SUPPORT = '<tg-emoji emoji-id="5447644880824181073">⚠️</tg-emoji>'
@@ -39,9 +41,9 @@ EMOJI_RULES = '<tg-emoji emoji-id="5397797168264260168">📜</tg-emoji>'
 
 def welcome_text(username: str) -> str:
     return (
-        "🎁 <b>Добро пожаловать в FETORYTO Shop</b> — {name}!\n\n"
-        "🤖 Автоматизированный бот по выдаче Telegram-аккаунтов.\n\n"
-        "Выберите действие 👇"
+        f"{EMOJI_WAVE} <b>Добро пожаловать в FETORYTO Shop</b> — {{name}}!\n\n"
+        f"{EMOJI_ROBOT} <i>Автоматизированный бот по выдаче Telegram-аккаунтов.</i>\n\n"
+        "<b>Выберите действие 👇</b>"
     ).format(name=username)
 
 
