@@ -86,6 +86,14 @@ EMOJI_SHOP = '<tg-emoji emoji-id="5920332557466997677">🏪</tg-emoji>'
 EMOJI_PROFILE = '<tg-emoji emoji-id="5262690351969215936">📃</tg-emoji>'
 EMOJI_SUPPORT = '<tg-emoji emoji-id="5447644880824181073">⚠️</tg-emoji>'
 EMOJI_RULES = '<tg-emoji emoji-id="5397797168264260168">📜</tg-emoji>'
+EMOJI_PLANE = '<tg-emoji emoji-id="5208888662451835014">✈️</tg-emoji>'
+EMOJI_BOX = '<tg-emoji emoji-id="5258134813302332906">📦</tg-emoji>'
+EMOJI_MONEY = '<tg-emoji emoji-id="5409048419211682843">💵</tg-emoji>'
+EMOJI_BAG = '<tg-emoji emoji-id="5377660214096974712">🛍</tg-emoji>'
+EMOJI_STAR = '<tg-emoji emoji-id="5438496463044752972">⭐️</tg-emoji>'
+EMOJI_WALLET = '<tg-emoji emoji-id="5769126056262898415">👛</tg-emoji>'
+EMOJI_CROSS = '<tg-emoji emoji-id="5210952531676504517">❌</tg-emoji>'
+EMOJI_SMILE = '<tg-emoji emoji-id="6039496266180726678">🙂</tg-emoji>'
 
 # ──────────────────────────────────────────────────────────────────────────
 # ТЕКСТЫ
@@ -120,10 +128,10 @@ def shop_text() -> str:
     return (
         f"{EMOJI_SHOP} <b>Магазин FETORYTO</b>\n\n"
         "🇷🇺 <b>РОССИЯ</b>\n\n"
-        "👉 Чистые аккаунты с российским номером (+7).\n"
+        f"{EMOJI_PLANE} Чистые аккаунты с российским номером (+7).\n"
         "Идеально подходят для рассылки и других целей.\n\n"
-        f"📦 В наличии: {RUSSIA_STOCK} шт.\n"
-        f"💵 Цена: ${RUSSIA_BASE_PRICE:.2f}/шт\n\n"
+        f"{EMOJI_BOX} В наличии: {RUSSIA_STOCK} шт.\n"
+        f"{EMOJI_MONEY} Цена: ${RUSSIA_BASE_PRICE:.2f}/шт\n\n"
         "🏷 Оптовые цены:\n"
         "• от 25 шт. — $1.20/шт\n"
         "• от 75 шт. — $1.15/шт\n"
@@ -137,13 +145,13 @@ def shop_text() -> str:
 def purchase_confirm_text(quantity: int, price_per_unit: float, balance: float) -> str:
     total = quantity * price_per_unit
     lines = [
-        f"🛒 <b>Покупка {quantity} шт. [ РОССИЯ ]</b>\n",
-        f"💰 Цена: ${price_per_unit:.2f}/шт",
-        f"💰 Сумма: ${total:.2f}",
-        f"💰 Ваш баланс: ${balance:.2f}",
+        f"{EMOJI_BAG} <b>Покупка {quantity} шт. [ РОССИЯ ]</b>\n",
+        f"{EMOJI_MONEY} Цена: ${price_per_unit:.2f}/шт",
+        f"{EMOJI_STAR} Сумма: ${total:.2f}",
+        f"{EMOJI_WALLET} Ваш баланс: ${balance:.2f}",
     ]
     if balance < total:
-        lines.append("\n❌ Недостаточно средств")
+        lines.append(f"\n{EMOJI_CROSS} Недостаточно средств")
     return "\n".join(lines)
 
 
@@ -152,9 +160,9 @@ def profile_text(user_id: int) -> str:
     return (
         f"{EMOJI_PROFILE} <b>Профиль</b>\n\n"
         f"ID: <code>{user_id}</code>\n"
-        f"Баланс: ${user['balance']:.2f}\n"
-        f"Покупок: {user['purchases']}\n"
-        f"Рефералов: {user['referrals']}"
+        f"{EMOJI_WALLET} Баланс: ${user['balance']:.2f}\n"
+        f"{EMOJI_BAG} Покупок: {user['purchases']}\n"
+        f"{EMOJI_SMILE} Рефералов: {user['referrals']}"
     )
 
 
@@ -227,24 +235,35 @@ def back_kb() -> InlineKeyboardMarkup:
 def shop_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🚀 Ввести кол-во", callback_data="shop_enter_qty")],
+            [
+                InlineKeyboardButton(
+                    text="Ввести количество",
+                    callback_data="shop_enter_qty",
+                    icon_custom_emoji_id="5197269100878907942",
+                )
+            ],
             [InlineKeyboardButton(text="◀️ Назад", callback_data="menu_back")],
         ]
     )
 
 
 def purchase_kb(enough_balance: bool) -> InlineKeyboardMarkup:
+    cancel_button = InlineKeyboardButton(
+        text="ОТМЕНА",
+        callback_data="purchase_cancel",
+        icon_custom_emoji_id="5210952531676504517",
+    )
     if enough_balance:
         return InlineKeyboardMarkup(
             inline_keyboard=[
                 [InlineKeyboardButton(text="✅ Подтвердить", callback_data="purchase_confirm")],
-                [InlineKeyboardButton(text="❌ ОТМЕНА", callback_data="purchase_cancel")],
+                [cancel_button],
             ]
         )
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="💵 ПОПОЛНИТЬ БАЛАНС", callback_data="profile_topup")],
-            [InlineKeyboardButton(text="❌ ОТМЕНА", callback_data="purchase_cancel")],
+            [cancel_button],
         ]
     )
 
@@ -334,7 +353,13 @@ async def on_shop_enter_qty(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.message.edit_text(
         f"✏️ Введите количество (от 1 до {RUSSIA_STOCK} шт.):",
         reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text="❌ ОТМЕНА", callback_data="purchase_cancel")]]
+            inline_keyboard=[[
+                InlineKeyboardButton(
+                    text="ОТМЕНА",
+                    callback_data="purchase_cancel",
+                    icon_custom_emoji_id="5210952531676504517",
+                )
+            ]]
         ),
     )
     await callback.answer()
@@ -420,7 +445,13 @@ async def on_profile_promo(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.message.edit_text(
         "🎁 Введите промокод:",
         reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text="❌ ОТМЕНА", callback_data="menu_profile")]]
+            inline_keyboard=[[
+                InlineKeyboardButton(
+                    text="ОТМЕНА",
+                    callback_data="menu_profile",
+                    icon_custom_emoji_id="5210952531676504517",
+                )
+            ]]
         ),
     )
     await callback.answer()
