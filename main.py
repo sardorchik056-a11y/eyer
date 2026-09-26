@@ -127,8 +127,16 @@ def reply_menu_kb() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [
-                KeyboardButton(text="Меню", style="primary"),
-                KeyboardButton(text="Сотрудничество", style="primary"),
+                KeyboardButton(
+                    text="Меню",
+                    style="primary",
+                    icon_custom_emoji_id="5249231689695115145",
+                ),
+                KeyboardButton(
+                    text="Сотрудничество",
+                    style="primary",
+                    icon_custom_emoji_id="5258501105293205250",
+                ),
             ]
         ],
         resize_keyboard=True,
