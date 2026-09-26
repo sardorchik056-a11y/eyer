@@ -17,7 +17,7 @@ from aiogram.types import (
 # НАСТРОЙКИ
 # ──────────────────────────────────────────────────────────────────────────
 
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "ВСТАВЬТЕ_СЮДА_ТОКЕН_БОТА")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8651956926:AAG3ML1uGBPQOgrM5WAMl3kXaRLvVxTHCsw")
 
 logging.basicConfig(level=logging.INFO)
 router = Router()
