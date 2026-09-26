@@ -371,7 +371,7 @@ async def on_back(callback: CallbackQuery, state: FSMContext) -> None:
 async def on_shop_enter_qty(callback: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(PurchaseFSM.entering_quantity)
     await callback.message.edit_text(
-        f"✏️ Введите количество (от 1 до {RUSSIA_STOCK} шт.):",
+        f'<tg-emoji emoji-id="5197269100878907942">✍️</tg-emoji> <i>Введите количество (от 1 до {RUSSIA_STOCK} шт.):</i>',
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[[
                 InlineKeyboardButton(
