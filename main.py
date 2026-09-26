@@ -94,6 +94,8 @@ EMOJI_STAR = '<tg-emoji emoji-id="5438496463044752972">⭐️</tg-emoji>'
 EMOJI_WALLET = '<tg-emoji emoji-id="5769126056262898415">👛</tg-emoji>'
 EMOJI_CROSS = '<tg-emoji emoji-id="5210952531676504517">❌</tg-emoji>'
 EMOJI_SMILE = '<tg-emoji emoji-id="6039496266180726678">🙂</tg-emoji>'
+EMOJI_WHOLESALE_STAR = '<tg-emoji emoji-id="6034923938486684992">⭐️</tg-emoji>'
+EMOJI_BACK = '<tg-emoji emoji-id="6039539366177541657">⬅️</tg-emoji>'
 
 # ──────────────────────────────────────────────────────────────────────────
 # ТЕКСТЫ
@@ -128,16 +130,16 @@ def shop_text() -> str:
     return (
         f"{EMOJI_SHOP} <b>Магазин FETORYTO</b>\n\n"
         "🇷🇺 <b>РОССИЯ</b>\n\n"
-        f"{EMOJI_PLANE} Чистые аккаунты с российским номером (+7).\n"
-        "Идеально подходят для рассылки и других целей.\n\n"
+        f"{EMOJI_PLANE} <i>Чистые аккаунты с российским номером (+7).\n"
+        "Идеально подходят для рассылки и других целей.</i>\n\n"
         f"{EMOJI_BOX} В наличии: {RUSSIA_STOCK} шт.\n"
         f"{EMOJI_MONEY} Цена: ${RUSSIA_BASE_PRICE:.2f}/шт\n\n"
-        "🏷 Оптовые цены:\n"
-        "• от 25 шт. — $1.20/шт\n"
+        f"{EMOJI_WHOLESALE_STAR} <b>Оптовые цены:</b>\n"
+        "<i>• от 25 шт. — $1.20/шт\n"
         "• от 75 шт. — $1.15/шт\n"
         "• от 110 шт. — $1.00/шт\n"
-        "• от 200 шт. — $0.95/шт\n\n"
-        f"ИНДИВИДУАЛЬНОЕ СОТРУДНИЧЕСТВО {PARTNERSHIP_CONTACT}\n\n"
+        "• от 200 шт. — $0.95/шт</i>\n\n"
+        f"<b>ИНДИВИДУАЛЬНОЕ СОТРУДНИЧЕСТВО {PARTNERSHIP_CONTACT}</b>\n\n"
         "<b>Выберите количество</b> 👇"
     )
 
@@ -224,12 +226,16 @@ def reply_menu_kb() -> ReplyKeyboardMarkup:
     )
 
 
-def back_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="◀️ Назад", callback_data="menu_back")]
-        ]
+def back_button() -> InlineKeyboardButton:
+    return InlineKeyboardButton(
+        text="Назад",
+        callback_data="menu_back",
+        icon_custom_emoji_id="6039539366177541657",
     )
+
+
+def back_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[back_button()]])
 
 
 def shop_kb() -> InlineKeyboardMarkup:
@@ -242,7 +248,7 @@ def shop_kb() -> InlineKeyboardMarkup:
                     icon_custom_emoji_id="5197269100878907942",
                 )
             ],
-            [InlineKeyboardButton(text="◀️ Назад", callback_data="menu_back")],
+            [back_button()],
         ]
     )
 
@@ -262,7 +268,13 @@ def purchase_kb(enough_balance: bool) -> InlineKeyboardMarkup:
         )
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="💵 ПОПОЛНИТЬ БАЛАНС", callback_data="profile_topup")],
+            [
+                InlineKeyboardButton(
+                    text="ПОПОЛНИТЬ БАЛАНС",
+                    callback_data="profile_topup",
+                    icon_custom_emoji_id="5879814368572478751",
+                )
+            ],
             [cancel_button],
         ]
     )
@@ -272,10 +284,18 @@ def profile_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="💵 ПОПОЛНИТЬ", callback_data="profile_topup"),
-                InlineKeyboardButton(text="🎁 ВВЕСТИ ПРОМОКОД", callback_data="profile_promo"),
+                InlineKeyboardButton(
+                    text="ПОПОЛНИТЬ",
+                    callback_data="profile_topup",
+                    icon_custom_emoji_id="5879814368572478751",
+                ),
+                InlineKeyboardButton(
+                    text="ВВЕСТИ ПРОМОКОД",
+                    callback_data="profile_promo",
+                    icon_custom_emoji_id="6037175527846975726",
+                ),
             ],
-            [InlineKeyboardButton(text="◀️ Назад", callback_data="menu_back")],
+            [back_button()],
         ]
     )
 
