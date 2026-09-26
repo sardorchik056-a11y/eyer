@@ -23,7 +23,7 @@ from aiogram.types import (
 # ──────────────────────────────────────────────────────────────────────────
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "8651956926:AAG3ML1uGBPQOgrM5WAMl3kXaRLvVxTHCsw")
-PARTNERSHIP_CONTACT = "@user"  # контакт для индивидуального сотрудничества
+PARTNERSHIP_CONTACT = "@FAWT_TG_QAS_FO"  # контакт для сотрудничества, поддержки и оплаты
 
 logging.basicConfig(level=logging.INFO)
 router = Router()
@@ -37,7 +37,7 @@ users_db: dict[int, dict] = {}
 
 def get_user(user_id: int) -> dict:
     return users_db.setdefault(
-        user_id, {"balance": 0.0, "purchases": 0, "referrals": 0}
+        user_id, {"balance": 0.0, "purchases": 0, "total_spent": 0.0}
     )
 
 
@@ -127,7 +127,7 @@ RULES_TEXT = (
 SUPPORT_TEXT = (
     f"{EMOJI_SUPPORT} <b>Поддержка</b>\n\n"
     "Если у вас возникли вопросы или проблемы с заказом — "
-    "напишите нашему оператору: @your_support_username"
+    f"напишите нашему оператору: {PARTNERSHIP_CONTACT}"
 )
 
 
@@ -169,7 +169,7 @@ def profile_text(user_id: int) -> str:
         f"ID: <code>{user_id}</code>\n"
         f"{EMOJI_WALLET} Баланс: ${user['balance']:.2f}\n"
         f"{EMOJI_BAG} Покупок: {user['purchases']}\n"
-        f"{EMOJI_SMILE} Рефералов: {user['referrals']}"
+        f"{EMOJI_STAR} Всего потрачено: ${user['total_spent']:.2f}"
     )
 
 
@@ -326,7 +326,7 @@ async def on_reply_menu(message: Message) -> None:
 @router.message(F.text == "Сотрудничество")
 async def on_partnership(message: Message) -> None:
     await message.answer(
-        "🤝 Раздел «Сотрудничество» в разработке. Скоро здесь появятся условия."
+        f"<i>Для прямого сотрудничества обращайтесь: {PARTNERSHIP_CONTACT}</i>"
     )
 
 
@@ -436,6 +436,7 @@ async def on_purchase_confirm(callback: CallbackQuery, state: FSMContext) -> Non
 
     user["balance"] -= total
     user["purchases"] += 1
+    user["total_spent"] += total
     await state.clear()
 
     await callback.message.edit_text(
@@ -458,7 +459,7 @@ async def on_profile_topup(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await callback.message.edit_text(
         "💵 <b>Пополнение баланса</b>\n\n"
-        "Раздел оплаты в разработке. Для пополнения обратитесь в поддержку.",
+        f"Раздел оплаты в разработке. Для пополнения обратитесь: {PARTNERSHIP_CONTACT}",
         reply_markup=back_kb(),
     )
     await callback.answer()
