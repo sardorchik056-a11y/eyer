@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 
+import aiohttp
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -25,6 +26,12 @@ from aiogram.types import (
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "8651956926:AAG3ML1uGBPQOgrM5WAMl3kXaRLvVxTHCsw")
 PARTNERSHIP_CONTACT = "@FAWT_TG_QAS_FO"  # контакт для сотрудничества, поддержки и оплаты
 
+# Пополнение через @send (Crypto Pay API, тот же сервис, что и @CryptoBot).
+# Токен приложения получаете командой /pay в @CryptoBot (Crypto Pay → My Apps).
+CRYPTO_PAY_TOKEN = "582363:AALEf7JOugnrQyrkMHzH5UrO7pdOjjYnTQy"
+CRYPTO_PAY_API_URL = "https://pay.crypt.bot/api"
+CRYPTO_PAY_ACCEPTED_ASSETS = "USDT,TON,BTC"
+
 logging.basicConfig(level=logging.INFO)
 router = Router()
 
@@ -37,8 +44,45 @@ users_db: dict[int, dict] = {}
 
 def get_user(user_id: int) -> dict:
     return users_db.setdefault(
-        user_id, {"balance": 0.0, "purchases": 0, "total_spent": 0.0}
+        user_id,
+        {"balance": 0.0, "purchases": 0, "total_spent": 0.0, "paid_invoices": set()},
     )
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# CRYPTO PAY API (@send / @CryptoBot) — создание и проверка счетов
+# ──────────────────────────────────────────────────────────────────────────
+
+async def crypto_pay_request(method: str, **params) -> dict:
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            f"{CRYPTO_PAY_API_URL}/{method}",
+            headers={"Crypto-Pay-API-Token": CRYPTO_PAY_TOKEN},
+            json=params,
+            timeout=aiohttp.ClientTimeout(total=15),
+        ) as resp:
+            data = await resp.json()
+    if not data.get("ok"):
+        raise RuntimeError(data.get("error", "Crypto Pay API error"))
+    return data["result"]
+
+
+async def create_topup_invoice(user_id: int, amount: float) -> dict:
+    return await crypto_pay_request(
+        "createInvoice",
+        currency_type="fiat",
+        fiat="USD",
+        amount=f"{amount:.2f}",
+        accepted_assets=CRYPTO_PAY_ACCEPTED_ASSETS,
+        description=f"Пополнение баланса FETORYTO Shop — ID {user_id}",
+        payload=str(user_id),
+    )
+
+
+async def get_invoice(invoice_id: int) -> dict | None:
+    result = await crypto_pay_request("getInvoices", invoice_ids=str(invoice_id))
+    items = result.get("items", [])
+    return items[0] if items else None
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -70,6 +114,10 @@ class PurchaseFSM(StatesGroup):
 
 class PromoFSM(StatesGroup):
     entering_code = State()
+
+
+class TopupFSM(StatesGroup):
+    entering_amount = State()
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -456,13 +504,114 @@ async def on_purchase_confirm(callback: CallbackQuery, state: FSMContext) -> Non
 
 @router.callback_query(F.data == "profile_topup")
 async def on_profile_topup(callback: CallbackQuery, state: FSMContext) -> None:
-    await state.clear()
+    await state.set_state(TopupFSM.entering_amount)
     await callback.message.edit_text(
-        "💵 <b>Пополнение баланса</b>\n\n"
-        f"Раздел оплаты в разработке. Для пополнения обратитесь: {PARTNERSHIP_CONTACT}",
-        reply_markup=back_kb(),
+        f"{EMOJI_MONEY} <b>Пополнение баланса</b>\n\n"
+        f"{EMOJI_BAG} <i>Оплата принимается через @send (USDT, TON, BTC и др.).</i>\n\n"
+        "✍️ <i>Введите сумму пополнения в USD (например: 10):</i>",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[[
+                InlineKeyboardButton(
+                    text="ОТМЕНА",
+                    callback_data="menu_profile",
+                    icon_custom_emoji_id="5210952531676504517",
+                )
+            ]]
+        ),
     )
     await callback.answer()
+
+
+@router.message(StateFilter(TopupFSM.entering_amount))
+async def on_topup_amount_entered(message: Message, state: FSMContext) -> None:
+    raw = message.text.strip().replace(",", ".")
+    try:
+        amount = float(raw)
+        if amount <= 0:
+            raise ValueError
+    except ValueError:
+        await message.answer("⚠️ Введите корректную сумму — число больше 0 (например: 10).")
+        return
+
+    await state.clear()
+
+    if not CRYPTO_PAY_TOKEN:
+        await message.answer(
+            f"{EMOJI_CROSS} Пополнение временно недоступно. "
+            f"Обратитесь: {PARTNERSHIP_CONTACT}",
+            reply_markup=back_kb(),
+        )
+        return
+
+    try:
+        invoice = await create_topup_invoice(message.from_user.id, amount)
+    except Exception:
+        logging.exception("Crypto Pay: ошибка создания счёта")
+        await message.answer(
+            f"{EMOJI_CROSS} Не удалось создать счёт. "
+            f"Попробуйте позже или обратитесь: {PARTNERSHIP_CONTACT}",
+            reply_markup=back_kb(),
+        )
+        return
+
+    text = (
+        f"{EMOJI_BAG} <b>Счёт на пополнение создан</b>\n\n"
+        f"{EMOJI_MONEY} Сумма: ${amount:.2f}\n"
+        f"{EMOJI_WALLET} Оплата через @send — любой доступной криптовалютой\n\n"
+        "<i>После оплаты нажмите «Я оплатил» для зачисления средств.</i>"
+    )
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Оплатить",
+                    url=invoice["pay_url"],
+                    icon_custom_emoji_id="5409048419211682843",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Я оплатил",
+                    callback_data=f"topup_check:{invoice['invoice_id']}",
+                    icon_custom_emoji_id="5438496463044752972",
+                )
+            ],
+            [back_button()],
+        ]
+    )
+    await message.answer(text, reply_markup=kb)
+
+
+@router.callback_query(F.data.startswith("topup_check:"))
+async def on_topup_check(callback: CallbackQuery) -> None:
+    invoice_id = int(callback.data.split(":", 1)[1])
+
+    try:
+        invoice = await get_invoice(invoice_id)
+    except Exception:
+        logging.exception("Crypto Pay: ошибка проверки счёта")
+        await callback.answer("Ошибка проверки, попробуйте ещё раз.", show_alert=True)
+        return
+
+    if not invoice or invoice.get("status") != "paid":
+        await callback.answer("Счёт ещё не оплачен.", show_alert=True)
+        return
+
+    user = get_user(callback.from_user.id)
+    if invoice_id in user["paid_invoices"]:
+        await callback.answer("Этот счёт уже был зачислен.", show_alert=True)
+        return
+
+    amount = float(invoice["amount"])
+    user["balance"] += amount
+    user["paid_invoices"].add(invoice_id)
+
+    await callback.message.edit_text(
+        f"{EMOJI_WALLET} <b>Баланс пополнен на ${amount:.2f}!</b>\n\n"
+        f"{EMOJI_STAR} Текущий баланс: ${user['balance']:.2f}",
+        reply_markup=back_kb(),
+    )
+    await callback.answer("Успешно зачислено ✅")
 
 
 @router.callback_query(F.data == "profile_promo")
