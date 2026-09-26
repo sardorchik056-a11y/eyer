@@ -19,7 +19,7 @@ from aiogram.types import (
 # НАСТРОЙКИ
 # ──────────────────────────────────────────────────────────────────────────
 
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8651956926:AAG3ML1uGBPQOgrM5WAMl3kXaRLvVxTHCsw")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "ВСТАВЬТЕ_СЮДА_ТОКЕН_БОТА")
 
 logging.basicConfig(level=logging.INFO)
 router = Router()
@@ -151,6 +151,7 @@ def back_kb() -> InlineKeyboardMarkup:
 async def cmd_start(message: Message) -> None:
     username = message.from_user.full_name or message.from_user.username or "Гость"
     await message.answer(welcome_text(username), reply_markup=reply_menu_kb())
+    await message.answer(welcome_text(username), reply_markup=main_menu_kb())
 
 
 @router.message(F.text == "Меню")
