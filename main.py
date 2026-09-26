@@ -23,7 +23,7 @@ from aiogram.types import (
 # НАСТРОЙКИ
 # ──────────────────────────────────────────────────────────────────────────
 
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8651956926:AAG3ML1uGBPQOgrM5WAMl3kXaRLvVxTHCsw")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8571996845:AAFrQfRptF6GehWkXe5ADmPSR4aKqccSoic")
 PARTNERSHIP_CONTACT = "@FAWT_TG_QAS_FO"  # контакт для сотрудничества, поддержки и оплаты
 
 # Пополнение через @send (Crypto Pay API, тот же сервис, что и @CryptoBot).
