@@ -150,7 +150,7 @@ def back_kb() -> InlineKeyboardMarkup:
 @router.message(CommandStart())
 async def cmd_start(message: Message) -> None:
     username = message.from_user.full_name or message.from_user.username or "Гость"
-    await message.answer(welcome_text(username), reply_markup=reply_menu_kb())
+    await message.answer(EMOJI_WAVE, reply_markup=reply_menu_kb())
     await message.answer(welcome_text(username), reply_markup=main_menu_kb())
 
 
