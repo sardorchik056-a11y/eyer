@@ -27,7 +27,7 @@ from aiogram.types import (
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8712603440:AAGc7SV7cAuHYVYZbVv0dSpxUKtmKlDehqM")
 CRYPTOBOT_TOKEN = os.getenv("CRYPTOBOT_TOKEN", "582363:AALEf7JOugnrQyrkMHzH5UrO7pdOjjYnTQy")
 CRYPTO_API = "https://pay.crypt.bot/api"
-XROCKET_TOKEN = os.getenv("XROCKET_TOKEN", "034cea3212dcfe762c3dc3093")
+XROCKET_TOKEN = os.getenv("XROCKET_TOKEN", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBJZCI6IjMwMDgzMiIsImp0aSI6ImFwcDozMDA4MzI6NjY1NzBkYzktMzk4Ny00MWM5LWE1MjAtMzljNTk5ZWUxNjAzIiwiaWF0IjoxNzkwOTUwMzI3fQ.40uVUkYIFEep0eCAewabSQJs7C-XufroQUyzX5UVItc")
 XROCKET_API = os.getenv("XROCKET_API", "https://pay.api.xrocket.exchange")  # тестнет: https://pay.api.testnet.xrocket.exchange
 ADMIN_ID = 8118184388
 DB_PATH = "bot.db"
