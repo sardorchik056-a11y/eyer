@@ -1471,6 +1471,8 @@ class Admin(StatesGroup):
     minq = State()
     mail = State()
     channel = State()
+    bal_user = State()
+    bal_amount = State()
 
 
 ADM_FIELDS = {
@@ -1503,7 +1505,7 @@ async def admin_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [btn("Статистика", "adm:stats", ID_STATS, "📊"), btn("Рассылка", "adm:mail", ID_MAIL, "✉️")],
-            [btn("Каталог", "adm:cat", ID_SHOP, "🛍")],
+            [btn("Каталог", "adm:cat", ID_SHOP, "🛍"), btn("Выдать баланс", "adm:bal", ID_WALLET, "💰")],
             [btn("Канал подписки", "adm:chan", ID_NOTE, "ℹ️")],
             [btn(f"Автоприём заявок: {'вкл' if auto else 'выкл'}", "adm:auto", ID_OK if auto else ID_DENIED)],
             [back_btn("menu", "В меню")],
@@ -1841,6 +1843,124 @@ async def adm_chan_off(call: CallbackQuery) -> None:
     await set_setting("channel_url", None)
     await call.answer("Проверка подписки отключена")
     await admin_channel_screen(call.message, edit=True)
+
+
+# ---------- выдача баланса ----------
+async def find_user(raw: str) -> aiosqlite.Row | None:
+    raw = raw.strip().lstrip("@")
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        if raw.isdigit():
+            q, args = "SELECT * FROM users WHERE user_id = ?", (int(raw),)
+        else:
+            q, args = "SELECT * FROM users WHERE LOWER(username) = ?", (raw.lower(),)
+        async with db.execute(q, args) as cur:
+            return await cur.fetchone()
+
+
+def user_label(u: aiosqlite.Row) -> str:
+    name = f"@{u['username']}" if u["username"] else (u["full_name"] or "без имени")
+    return f"{html.escape(name)} (<code>{u['user_id']}</code>)"
+
+
+@router.callback_query(F.data == "adm:bal")
+async def adm_bal(call: CallbackQuery, state: FSMContext) -> None:
+    if not is_admin(call.from_user.id):
+        await call.answer()
+        return
+    await state.set_state(Admin.bal_user)
+    await call.answer()
+    await call.message.edit_text(
+        f"{ce(ID_WALLET, '💰')} <b>Выдача баланса</b>\n\n"
+        "Отправьте ID или @username пользователя.",
+        reply_markup=adm_cancel("adm"),
+    )
+
+
+@router.message(Admin.bal_user, F.text)
+async def adm_bal_user(message: Message, state: FSMContext) -> None:
+    if not is_admin(message.from_user.id):
+        return
+    user = await find_user(message.text)
+    if not user:
+        await message.answer(err("Пользователь не найден. Он должен хотя бы раз запустить бота."))
+        return
+    await state.update_data(uid=user["user_id"])
+    await state.set_state(Admin.bal_amount)
+    await message.answer(
+        f"{ce(ID_USER, '👤')} {user_label(user)}\n"
+        f"{ce(ID_WALLET, '💰')} Баланс: {money(user['balance'])}\n\n"
+        "Отправьте сумму в $ (например <code>5</code> или <code>2.5</code>). "
+        "Отрицательное число спишет баланс.",
+        reply_markup=adm_cancel("adm"),
+    )
+
+
+@router.message(Admin.bal_amount, F.text)
+async def adm_bal_amount(message: Message, state: FSMContext) -> None:
+    if not is_admin(message.from_user.id):
+        return
+    user = await get_user((await state.get_data()).get("uid", 0))
+    if not user:
+        await state.clear()
+        return
+    amount = parse_amount(message.text)
+    if amount is None or amount == 0 or abs(amount) > 100000:
+        await message.answer(err("Введите ненулевую сумму, например 5 или -2.5"))
+        return
+    if round(user["balance"] + amount, 2) < 0:
+        await message.answer(err(f"Нельзя списать больше баланса ({money(user['balance'])})"))
+        return
+    await state.update_data(amount=amount)
+    sign = "Выдать" if amount > 0 else "Списать"
+    await message.answer(
+        f"{sign} <b>{money(abs(amount))}</b>\n"
+        f"Пользователь: {user_label(user)}\n"
+        f"Баланс: {money(user['balance'])} → {money(round(user['balance'] + amount, 2))}",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [btn("Подтвердить", "adm:bal:ok", ID_OK, "✔️", "success")],
+                [btn("Отменить", "adm", ID_DENIED, "❌", "danger")],
+            ]
+        ),
+    )
+
+
+@router.callback_query(F.data == "adm:bal:ok")
+async def adm_bal_ok(call: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+    if not is_admin(call.from_user.id):
+        await call.answer()
+        return
+    data = await state.get_data()
+    uid, amount = data.get("uid"), data.get("amount")
+    if uid is None or amount is None:
+        await call.answer("Сначала введите сумму", show_alert=True)
+        return
+    await state.clear()
+    async with aiosqlite.connect(DB_PATH) as db:
+        cur = await db.execute(
+            "UPDATE users SET balance = ROUND(balance + ?, 2) WHERE user_id = ? AND ROUND(balance + ?, 2) >= 0",
+            (amount, uid, amount),
+        )
+        await db.commit()
+    if cur.rowcount != 1:
+        await call.answer("Не удалось изменить баланс", show_alert=True)
+        return
+    user = await get_user(uid)
+    await call.answer()
+    await call.message.edit_text(
+        f"{ce(ID_OK, '✔️')} <b>Готово</b>\n\n{user_label(user)}\nНовый баланс: {money(user['balance'])}",
+        reply_markup=back_kb("adm"),
+    )
+    note = (
+        f"{ce(ID_OK, '✔️')} Администратор пополнил баланс на <b>{money(amount)}</b>"
+        if amount > 0
+        else f"{ce(ID_WARN, '⚠️')} Администратор списал с баланса <b>{money(-amount)}</b>"
+    )
+    try:
+        await bot.send_message(uid, note)
+    except TelegramAPIError:
+        pass
 
 
 async def main() -> None:
