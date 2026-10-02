@@ -2,6 +2,9 @@ import asyncio
 import html
 import io
 import logging
+import math
+import os
+import uuid
 from datetime import datetime
 
 import aiohttp
@@ -21,9 +24,11 @@ from aiogram.types import (
     Message,
 )
 
-BOT_TOKEN = "8712603440:AAGc7SV7cAuHYVYZbVv0dSpxUKtmKlDehqM"
-CRYPTOBOT_TOKEN = "582363:AALEf7JOugnrQyrkMHzH5UrO7pdOjjYnTQy"
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8712603440:AAGc7SV7cAuHYVYZbVv0dSpxUKtmKlDehqM")
+CRYPTOBOT_TOKEN = os.getenv("CRYPTOBOT_TOKEN", "582363:AALEf7JOugnrQyrkMHzH5UrO7pdOjjYnTQy")
 CRYPTO_API = "https://pay.crypt.bot/api"
+XROCKET_TOKEN = os.getenv("XROCKET_TOKEN", "034cea3212dcfe762c3dc3093")
+XROCKET_API = os.getenv("XROCKET_API", "https://pay.api.xrocket.exchange")  # тестнет: https://pay.api.testnet.xrocket.exchange
 ADMIN_ID = 8118184388
 DB_PATH = "bot.db"
 TITLE = "DASFFING"
@@ -62,17 +67,17 @@ ID_PAY = "5231005931550030290"     # 💸
 ID_NOTE = "5334544901428229844"    # ℹ️
 
 # ---- магазин ----
-CUR = "₽"
+CUR = "$"
 MIN_BUY = 10
-MIN_TOPUP = 50
-MAX_TOPUP = 100_000
+MIN_TOPUP = 1
+MAX_TOPUP = 1000
 SUPPORT_USERNAME = "DqASAQ"
 PRODUCTS = {
-    "tg": {"name": "Telegram нерег", "short": "Telegram", "icon": ID_TG, "fb": "✈️", "price": 50, "col": "bought_tg"},
-    "max": {"name": "MAX нерег", "short": "MAX", "icon": ID_MAX, "fb": "🟣", "price": 40, "col": "bought_max"},
+    "tg": {"name": "Telegram нерег", "short": "Telegram", "icon": ID_TG, "fb": "✈️", "price": 0.60, "col": "bought_tg"},
+    "max": {"name": "MAX нерег", "short": "MAX", "icon": ID_MAX, "fb": "🟣", "price": 0.50, "col": "bought_max"},
 }
 QTY_PRESETS = (10, 25, 50, 100)
-TOPUP_PRESETS = (100, 250, 500, 1000)
+TOPUP_PRESETS = (5, 10, 25, 50)
 BUSY: set[int] = set()
 
 ID_BTN_TOPUP = "5258204546391351475"
@@ -184,7 +189,7 @@ def menu_text(user: aiosqlite.Row, stock: dict) -> str:
     return (
         f"{TITLE}\n\n"
         f"{ce(ID_USER, '👤')} Ваш ID: {user['user_id']}\n"
-        f"{ce(ID_WALLET, '💰')} Баланс: {user['balance']:g} {CUR}\n\n"
+        f"{ce(ID_WALLET, '💰')} Баланс: {money(user['balance'])}\n\n"
         f"{ce(ID_BOX, '📦')} На складе:\n"
         f"{ce(ID_TG, '💬')} ТГ — {stock.get('tg', 0)} шт.\n"
         f"{ce(ID_MAX, '📲')} MAX — {stock.get('max', 0)} шт.\n\n"
@@ -200,16 +205,16 @@ def profile_text(user: aiosqlite.Row, username: str | None, ref_count: int, link
         f"{ce(ID_USER, '👤')} Профиль\n\n"
         f"{ce(ID_BADGE, '🆔')} ID: {user['user_id']}\n"
         f"{ce(ID_USERNAME, '📛')} Username: {shown_username}\n"
-        f"{ce(ID_WALLET, '💰')} Баланс: {user['balance']:g} {CUR}\n\n"
+        f"{ce(ID_WALLET, '💰')} Баланс: {money(user['balance'])}\n\n"
         f"{ce(ID_BOX, '📦')} Куплено всего:\n"
         f"{ce(ID_TG, '💬')} Telegram: {user['bought_tg']} шт.\n"
         f"{ce(ID_MAX, '📲')} MAX: {user['bought_max']} шт.\n"
-        f"{ce(ID_WALLET, '💰')} Потрачено: {user['spent']:g} {CUR}\n\n"
+        f"{ce(ID_WALLET, '💰')} Потрачено: {money(user['spent'])}\n\n"
         f"{DIVIDER}\n"
         f"{ce(ID_GIFT, '🎁')} Реферальная система\n"
         f"{DIVIDER}\n"
         f"{ce(ID_USERS, '👥')} Приглашено: {ref_count} чел.\n"
-        f"{ce(ID_WALLET, '💰')} Заработано: {user['ref_earned']:g} {CUR}\n\n"
+        f"{ce(ID_WALLET, '💰')} Заработано: {money(user['ref_earned'])}\n\n"
         f"{ce(ID_LINK, '🔗')} Ваша ссылка:\n"
         f"{link}\n\n"
         f"{ce(ID_PIN, '📌')} За каждое пополнение : {REF_PERCENT}%\n\n"
@@ -253,6 +258,11 @@ async def init_db() -> None:
         await db.execute(
             "CREATE TABLE IF NOT EXISTS invoices ("
             "invoice_id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, amount REAL NOT NULL, "
+            "status TEXT NOT NULL DEFAULT 'pending', created_at TEXT DEFAULT CURRENT_TIMESTAMP)"
+        )
+        await db.execute(
+            "CREATE TABLE IF NOT EXISTS xr_invoices (\n"
+            "invoice_id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, amount REAL NOT NULL, "
             "status TEXT NOT NULL DEFAULT 'pending', created_at TEXT DEFAULT CURRENT_TIMESTAMP)"
         )
         await db.execute("INSERT OR IGNORE INTO stock (platform, qty) VALUES ('tg', 472), ('max', 1488)")
@@ -330,13 +340,13 @@ async def get_referrals(user_id: int, limit: int = 30) -> list:
 
 async def add_balance(user_id: int, amount: float) -> None:
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (amount, user_id))
+        await db.execute("UPDATE users SET balance = ROUND(balance + ?, 2) WHERE user_id = ?", (amount, user_id))
         async with db.execute("SELECT referrer_id FROM users WHERE user_id = ?", (user_id,)) as cur:
             row = await cur.fetchone()
         if row and row[0]:
             bonus = round(amount * REF_PERCENT / 100, 2)
             await db.execute(
-                "UPDATE users SET balance = balance + ?, ref_earned = ref_earned + ? WHERE user_id = ?",
+                "UPDATE users SET balance = ROUND(balance + ?, 2), ref_earned = ROUND(ref_earned + ?, 2) WHERE user_id = ?",
                 (bonus, bonus, row[0]),
             )
         await db.commit()
@@ -520,7 +530,11 @@ class DeliveryError(Exception):
 
 
 def money(value: float) -> str:
-    return f"{value:g} {CUR}"
+    return f"{CUR}{value:,.2f}"
+
+
+def total_price(key: str, qty: int) -> float:
+    return round(PRODUCTS[key]["price"] * qty, 2)
 
 
 def p_icon(p: str) -> str:
@@ -565,7 +579,7 @@ def buy_text(key: str, stock: int, balance: float) -> str:
         f"{ce(ID_STATS, '📊')} В наличии: {stock} шт.\n"
         f"{ce(ID_WALLET, '💰')} Ваш баланс: {money(balance)}\n\n"
         f"{ce(ID_WARN, '⚠️')} Минимальная покупка: {MIN_BUY} шт.\n"
-        f"{ce(ID_PAY, '💸')} Минимальная сумма: {money(p['price'] * MIN_BUY)}\n\n"
+        f"{ce(ID_PAY, '💸')} Минимальная сумма: {money(total_price(key, MIN_BUY))}\n\n"
         "Сколько купить?"
     )
 
@@ -584,14 +598,14 @@ def qty_prompt_text(key: str, balance: float) -> str:
 
 def confirm_text(key: str, qty: int, balance: float) -> str:
     p = PRODUCTS[key]
-    total = p["price"] * qty
+    total = total_price(key, qty)
     return (
         f"{ce(ID_BUY, '🛒')} <b>Подтвердите покупку</b>\n\n"
         f"Товар: {p_icon(key)} {p['short']}\n"
         f"Количество: {qty} шт.\n"
         f"Цена за шт.: {money(p['price'])}\n"
         f"Итого: {money(total)}\n"
-        f"Остаток после покупки: {money(balance - total)}"
+        f"Остаток после покупки: {money(round(balance - total, 2))}"
     )
 
 
@@ -613,7 +627,7 @@ def topup_text() -> str:
     return (
         f"{ce(ID_PAY, '💸')} <b>Пополнение баланса</b>\n\n"
         f"Введите сумму пополнения.\nМинимум: {money(MIN_TOPUP)}.\n\n"
-        "Оплата через CryptoBot, баланс зачисляется автоматически."
+        "Оплата через CryptoBot или xRocket, баланс зачисляется автоматически."
     )
 
 
@@ -675,7 +689,7 @@ def delivery_error_kb() -> InlineKeyboardMarkup:
 def topup_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [btn(f"{n} {CUR}", f"tu:{n}") for n in TOPUP_PRESETS],
+            [btn(f"{CUR}{n}", f"tu:{n}") for n in TOPUP_PRESETS],
             [btn("Своя сумма", "tuc", fb="✏️")],
             [back_btn("menu")],
         ]
@@ -688,7 +702,7 @@ def check_qty(user: aiosqlite.Row, key: str, qty: int, stock: int) -> str | None
         return f"Минимум {MIN_BUY} штук"
     if qty > stock:
         return f"В наличии только {stock} шт"
-    if PRODUCTS[key]["price"] * qty > user["balance"]:
+    if total_price(key, qty) > round(user["balance"], 2):
         return "Недостаточно баланса"
     return None
 
@@ -696,7 +710,8 @@ def check_qty(user: aiosqlite.Row, key: str, qty: int, stock: int) -> str | None
 async def charge(user_id: int, total: float) -> bool:
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute(
-            "UPDATE users SET balance = balance - ?, spent = spent + ? WHERE user_id = ? AND balance >= ?",
+            "UPDATE users SET balance = ROUND(balance - ?, 2), spent = ROUND(spent + ?, 2) "
+            "WHERE user_id = ? AND ROUND(balance, 2) >= ?",
             (total, total, user_id, total),
         )
         await db.commit()
@@ -758,7 +773,7 @@ async def on_buy(call: CallbackQuery, state: FSMContext) -> None:
         return
     await state.clear()
     await call.answer()
-    if user["balance"] < PRODUCTS[key]["price"] * MIN_BUY:
+    if user["balance"] < total_price(key, MIN_BUY):
         await call.message.edit_text(no_funds_text(user["balance"]), reply_markup=no_funds_kb(key))
         return
     stock = (await get_stock()).get(key, 0)
@@ -841,7 +856,7 @@ async def on_confirm(call: CallbackQuery, bot: Bot) -> None:
         if problem:
             await call.answer(f"❌ {problem}", show_alert=True)
             return
-        total = PRODUCTS[key]["price"] * qty
+        total = total_price(key, qty)
         await call.answer()
         await call.message.edit_reply_markup(reply_markup=None)
 
@@ -883,10 +898,25 @@ async def on_confirm(call: CallbackQuery, bot: Bot) -> None:
 
 
 # ======================================================================
-#                      ПОПОЛНЕНИЕ (CryptoBot)
+#                ПОПОЛНЕНИЕ (CryptoBot + xRocket), суммы в USD
 # ======================================================================
+def parse_amount(raw: str) -> float | None:
+    try:
+        value = float(raw.strip().replace(",", ".").lstrip("$"))
+    except ValueError:
+        return None
+    if not math.isfinite(value):
+        return None
+    return round(value, 2)
+
+
+def not_configured(token: str) -> bool:
+    return token.startswith("ВСТАВЬТЕ")
+
+
+# ---------- CryptoBot ----------
 async def crypto_api(method: str, post: bool = False, **params):
-    if CRYPTOBOT_TOKEN.startswith("ВСТАВЬТЕ"):
+    if not_configured(CRYPTOBOT_TOKEN):
         raise RuntimeError("CRYPTOBOT_TOKEN не задан")
     headers = {"Crypto-Pay-API-Token": CRYPTOBOT_TOKEN}
     timeout = aiohttp.ClientTimeout(total=15)
@@ -899,13 +929,13 @@ async def crypto_api(method: str, post: bool = False, **params):
     return data["result"]
 
 
-async def create_invoice(user_id: int, amount: int) -> tuple[int, str]:
+async def create_invoice(user_id: int, amount: float) -> tuple[int, str]:
     res = await crypto_api(
         "createInvoice",
         post=True,
         currency_type="fiat",
-        fiat="RUB",
-        amount=str(amount),
+        fiat="USD",
+        amount=f"{amount:.2f}",
         description=f"Пополнение баланса {TITLE}",
         payload=str(user_id),
         expires_in=3600,
@@ -917,6 +947,13 @@ async def create_invoice(user_id: int, amount: int) -> tuple[int, str]:
         )
         await db.commit()
     return res["invoice_id"], res.get("bot_invoice_url") or res.get("pay_url")
+
+
+async def notify_credited(bot: Bot, user_id: int, amount: float) -> None:
+    try:
+        await bot.send_message(user_id, f"{ce(ID_OK, '✔️')} Баланс пополнен на <b>{money(amount)}</b>")
+    except TelegramAPIError:
+        pass
 
 
 async def sync_invoices(bot: Bot, ids: list[int]) -> list[int]:
@@ -945,19 +982,14 @@ async def sync_invoices(bot: Bot, ids: list[int]) -> list[int]:
             if status == "paid":
                 await add_balance(user_id, amount)
                 credited.append(inv["invoice_id"])
-                try:
-                    await bot.send_message(
-                        user_id, f"{ce(ID_OK, '✔️')} Баланс пополнен на <b>{money(amount)}</b>"
-                    )
-                except TelegramAPIError:
-                    pass
+                await notify_credited(bot, user_id, amount)
     return credited
 
 
 async def invoice_poller(bot: Bot) -> None:
     while True:
         await asyncio.sleep(20)
-        if CRYPTOBOT_TOKEN.startswith("ВСТАВЬТЕ"):
+        if not_configured(CRYPTOBOT_TOKEN):
             continue
         try:
             async with aiosqlite.connect(DB_PATH) as db:
@@ -966,23 +998,162 @@ async def invoice_poller(bot: Bot) -> None:
             if ids:
                 await sync_invoices(bot, ids)
         except Exception:
-            logging.exception("Ошибка проверки счетов")
+            logging.exception("Ошибка проверки счетов CryptoBot")
 
 
-async def start_topup(target: Message, user_id: int, amount: int) -> None:
+# ---------- xRocket ----------
+class XRocketError(Exception):
+    def __init__(self, status: int, problem: str) -> None:
+        super().__init__(f"xRocket {status}: {problem}")
+        self.status = status
+
+
+async def xrocket_api(method: str, path: str, *, body: dict | None = None, params: dict | None = None):
+    if not_configured(XROCKET_TOKEN):
+        raise RuntimeError("XROCKET_TOKEN не задан")
+    headers = {"Authorization": f"Bearer {XROCKET_TOKEN}", "Accept": "application/json"}
+    timeout = aiohttp.ClientTimeout(total=15)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with session.request(method, f"{XROCKET_API}{path}", headers=headers, json=body, params=params) as r:
+            try:
+                data = await r.json(content_type=None)
+            except Exception:
+                data = None
+            if not 200 <= r.status < 300:
+                problem = (data or {}).get("type") or (data or {}).get("detail") or "unknown"
+                raise XRocketError(r.status, str(problem))
+    return data
+
+
+async def create_xr_invoice(user_id: int, amount: float) -> tuple[str, str]:
+    # счёт выставляется в USDT (1 USDT ≈ 1 USD), на баланс зачисляется та же сумма в $
+    res = await xrocket_api(
+        "POST",
+        "/api/v1/invoices",
+        body={
+            "priceCurrency": "USDT",
+            "priceAmount": f"{amount:.2f}",
+            "clientInvoiceId": f"{user_id}-{uuid.uuid4().hex[:16]}",
+            "description": f"Пополнение баланса {TITLE}",
+            "expiresIn": 3_600_000,
+        },
+    )
+    invoice_id = str(res["id"])
+    link = (res.get("links") or {}).get("telegramBotLink") or (res.get("links") or {}).get("webLink")
+    if not link:
+        raise RuntimeError(f"xRocket: нет ссылки на оплату: {res}")
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO xr_invoices (invoice_id, user_id, amount) VALUES (?, ?, ?)",
+            (invoice_id, user_id, amount),
+        )
+        await db.commit()
+    return invoice_id, link
+
+
+async def sync_xr_invoices(bot: Bot, ids: list[str]) -> list[str]:
+    """Проверяет счета xRocket по одному (лимит API: 20 запросов/мин на метод)."""
+    credited: list[str] = []
+    for invoice_id in ids:
+        try:
+            inv = await xrocket_api("GET", "/api/v1/invoice", params={"invoiceId": invoice_id})
+        except XRocketError as exc:
+            if exc.status == 429:
+                break  # упёрлись в лимит — продолжим на следующем цикле
+            if exc.status == 404:
+                async with aiosqlite.connect(DB_PATH) as db:
+                    await db.execute(
+                        "UPDATE xr_invoices SET status = 'expired' WHERE invoice_id = ? AND status = 'pending'",
+                        (invoice_id,),
+                    )
+                    await db.commit()
+            logging.warning("xRocket %s: %s", invoice_id, exc)
+            continue
+        status = inv.get("status")
+        if status not in ("paid", "expired", "cancelled"):
+            continue
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute(
+                "UPDATE xr_invoices SET status = ? WHERE invoice_id = ? AND status = 'pending'",
+                (status, invoice_id),
+            )
+            await db.commit()
+            if cur.rowcount != 1:
+                continue
+            async with db.execute(
+                "SELECT user_id, amount FROM xr_invoices WHERE invoice_id = ?", (invoice_id,)
+            ) as c2:
+                user_id, amount = await c2.fetchone()
+        if status == "paid":
+            await add_balance(user_id, amount)
+            credited.append(invoice_id)
+            await notify_credited(bot, user_id, amount)
+    return credited
+
+
+async def xrocket_poller(bot: Bot) -> None:
+    while True:
+        await asyncio.sleep(30)
+        if not_configured(XROCKET_TOKEN):
+            continue
+        try:
+            async with aiosqlite.connect(DB_PATH) as db:
+                async with db.execute(
+                    "SELECT invoice_id FROM xr_invoices WHERE status = 'pending' ORDER BY created_at LIMIT 15"
+                ) as cur:
+                    ids = [r[0] for r in await cur.fetchall()]
+            if ids:
+                await sync_xr_invoices(bot, ids)
+        except Exception:
+            logging.exception("Ошибка проверки счетов xRocket")
+
+
+# ---------- экраны пополнения ----------
+def method_text(amount: float) -> str:
+    return (
+        f"{ce(ID_PAY, '💸')} <b>Пополнение на {money(amount)}</b>\n\n"
+        "Выберите способ оплаты:"
+    )
+
+
+def method_kb(amount: float) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [btn("CryptoBot", f"pm:cb:{amount:.2f}", ID_PAY, "💸")],
+            [btn("xRocket", f"pm:xr:{amount:.2f}", ID_PAY, "🚀")],
+            [back_btn("topup")],
+        ]
+    )
+
+
+async def show_methods(target: Message, amount: float, edit: bool = False) -> None:
+    if edit:
+        await target.edit_text(method_text(amount), reply_markup=method_kb(amount))
+    else:
+        await target.answer(method_text(amount), reply_markup=method_kb(amount))
+
+
+async def start_topup(target: Message, user_id: int, amount: float, method: str) -> None:
     try:
-        invoice_id, url = await create_invoice(user_id, amount)
+        if method == "xr":
+            invoice_id, url = await create_xr_invoice(user_id, amount)
+            check = f"chx:{invoice_id}"
+            via = "xRocket"
+        else:
+            invoice_id, url = await create_invoice(user_id, amount)
+            check = f"chk:{invoice_id}"
+            via = "CryptoBot"
     except Exception:
-        logging.exception("Не удалось создать счёт")
-        await target.answer(err("Оплата временно недоступна. Попробуйте позже."))
+        logging.exception("Не удалось создать счёт (%s)", method)
+        await target.answer(err("Оплата временно недоступна. Попробуйте позже или выберите другой способ."))
         return
     await target.answer(
         f"{ce(ID_PAY, '💸')} <b>Счёт на {money(amount)}</b>\n\n"
-        "Оплатите через CryptoBot — баланс зачислится автоматически.",
+        f"Оплатите через {via} — баланс зачислится автоматически.",
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
                 [url_btn("Оплатить", url, ID_PAY)],
-                [btn("Проверить оплату", f"chk:{invoice_id}", ID_OK, "✔️")],
+                [btn("Проверить оплату", check, ID_OK, "✔️")],
                 [back_btn("menu")],
             ]
         ),
@@ -1002,9 +1173,12 @@ async def on_topup(call: CallbackQuery, state: FSMContext) -> None:
 async def on_topup_preset(call: CallbackQuery) -> None:
     if not await require_approved(call):
         return
-    amount = int(call.data.split(":")[1])
+    amount = parse_amount(call.data.split(":")[1])
+    if amount is None or not MIN_TOPUP <= amount <= MAX_TOPUP:
+        await call.answer("❌ Неверная сумма", show_alert=True)
+        return
     await call.answer()
-    await start_topup(call.message, call.from_user.id, amount)
+    await show_methods(call.message, amount, edit=True)
 
 
 @router.callback_query(F.data == "tuc")
@@ -1014,7 +1188,8 @@ async def on_topup_custom(call: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(Flow.topup)
     await call.answer()
     await call.message.edit_text(
-        f"✏️ <b>Введите сумму</b>\n\nМинимум: {money(MIN_TOPUP)}.\nОтправьте число сообщением.",
+        f"✏️ <b>Введите сумму</b>\n\nМинимум: {money(MIN_TOPUP)}, максимум: {money(MAX_TOPUP)}.\n"
+        "Отправьте число сообщением (можно с копейками, например 2.5).",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[back_btn("topup", "Отмена")]]),
     )
 
@@ -1024,19 +1199,32 @@ async def on_topup_message(message: Message, state: FSMContext) -> None:
     user = await get_user(message.from_user.id)
     if not user or user["status"] != "approved":
         return
-    raw = message.text.strip()
-    if not raw.isdigit():
-        await message.answer(err("Отправьте число"))
+    amount = parse_amount(message.text)
+    if amount is None:
+        await message.answer(err("Отправьте число, например 5 или 2.5"))
         return
-    amount = int(raw)
     if amount < MIN_TOPUP:
-        await message.answer(err(f"Минимум {MIN_TOPUP} {CUR}"))
+        await message.answer(err(f"Минимум {money(MIN_TOPUP)}"))
         return
     if amount > MAX_TOPUP:
-        await message.answer(err(f"Максимум {MAX_TOPUP} {CUR}"))
+        await message.answer(err(f"Максимум {money(MAX_TOPUP)}"))
         return
     await state.clear()
-    await start_topup(message, message.from_user.id, amount)
+    await show_methods(message, amount)
+
+
+@router.callback_query(F.data.startswith("pm:"))
+async def on_pay_method(call: CallbackQuery) -> None:
+    if not await require_approved(call):
+        return
+    _, method, raw = call.data.split(":")
+    amount = parse_amount(raw)
+    if method not in ("cb", "xr") or amount is None or not MIN_TOPUP <= amount <= MAX_TOPUP:
+        await call.answer("❌ Неверные данные", show_alert=True)
+        return
+    await call.answer()
+    await call.message.edit_reply_markup(reply_markup=None)
+    await start_topup(call.message, call.from_user.id, amount, method)
 
 
 @router.callback_query(F.data.startswith("chk:"))
@@ -1047,13 +1235,31 @@ async def on_check_payment(call: CallbackQuery, bot: Bot) -> None:
     try:
         credited = await sync_invoices(bot, [invoice_id])
     except Exception:
-        logging.exception("Ошибка проверки оплаты")
+        logging.exception("Ошибка проверки оплаты CryptoBot")
         await call.answer("❌ Не удалось проверить оплату", show_alert=True)
         return
-    if credited:
-        await call.answer("✔️ Оплата получена", show_alert=True)
-    else:
-        await call.answer("Оплата пока не поступила", show_alert=True)
+    await call.answer("✔️ Оплата получена" if credited else "Оплата пока не поступила", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("chx:"))
+async def on_check_xr_payment(call: CallbackQuery, bot: Bot) -> None:
+    if not await require_approved(call):
+        return
+    invoice_id = call.data.split(":", 1)[1]
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT 1 FROM xr_invoices WHERE invoice_id = ? AND user_id = ?", (invoice_id, call.from_user.id)
+        ) as cur:
+            if not await cur.fetchone():
+                await call.answer("Счёт не найден", show_alert=True)
+                return
+    try:
+        credited = await sync_xr_invoices(bot, [invoice_id])
+    except Exception:
+        logging.exception("Ошибка проверки оплаты xRocket")
+        await call.answer("❌ Не удалось проверить оплату", show_alert=True)
+        return
+    await call.answer("✔️ Оплата получена" if credited else "Оплата пока не поступила", show_alert=True)
 
 
 # ======================================================================
@@ -1097,10 +1303,12 @@ async def main() -> None:
     dp.include_router(router)
     await bot.delete_webhook(drop_pending_updates=True)
     poller = asyncio.create_task(invoice_poller(bot))
+    xr_poller = asyncio.create_task(xrocket_poller(bot))
     try:
         await dp.start_polling(bot)
     finally:
         poller.cancel()
+        xr_poller.cancel()
 
 
 if __name__ == "__main__":
