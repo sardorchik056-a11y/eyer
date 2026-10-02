@@ -20,18 +20,18 @@ ID_DENIED = "5210952531676504517"
 ID_MAIL = "5253742260054409879"
 ID_WAIT = "5386367538735104399"
 
-ID_USER = ""
-ID_WALLET = ""
-ID_BOX = ""
-ID_TG = ""
-ID_MAX = ""
-ID_BUY = ""
+ID_USER = "5258011929993026890"
+ID_WALLET = "5258204546391351475"
+ID_BOX = "5258134813302332906"
+ID_TG = "5285350148451344065"
+ID_MAX = "5449407131675558756"
+ID_BUY = "5440841102871517055"
 
-ID_BTN_TOPUP = ""
-ID_BTN_PROFILE = ""
-ID_BTN_STATS = ""
-ID_BTN_CATALOG = ""
-ID_BTN_INFO = ""
+ID_BTN_TOPUP = "5258204546391351475"
+ID_BTN_PROFILE = "5258011929993026890"
+ID_BTN_STATS = "5231200819986047254"
+ID_BTN_CATALOG = "5406683434124859552"
+ID_BTN_INFO = "5334544901428229844"
 
 
 def ce(emoji_id: str, fallback: str) -> str:
@@ -103,13 +103,13 @@ def menu_text(user: aiosqlite.Row, stock: dict) -> str:
     return (
         f"{TITLE}\n\n"
         f"{ce(ID_USER, '👤')} Ваш ID: {user['user_id']}\n"
-        f"{ce(ID_WALLET, '👛')} Баланс: {user['balance']:g} $\n\n"
+        f"{ce(ID_WALLET, '💰')} Баланс: {user['balance']:g} $\n\n"
         f"{ce(ID_BOX, '📦')} На складе:\n"
-        f"{ce(ID_TG, '✈️')} ТГ — {stock.get('tg', 0)} шт.\n"
-        f"{ce(ID_MAX, '💬')} MAX — {stock.get('max', 0)} шт.\n\n"
-        f"{ce(ID_BUY, '🛍')} Куплено:\n"
-        f"{ce(ID_TG, '✈️')} ТГ — {user['bought_tg']} шт.\n"
-        f"{ce(ID_MAX, '💬')} MAX — {user['bought_max']} шт."
+        f"{ce(ID_TG, '💬')} ТГ — {stock.get('tg', 0)} шт.\n"
+        f"{ce(ID_MAX, '📲')} MAX — {stock.get('max', 0)} шт.\n\n"
+        f"{ce(ID_BUY, '🛒')} Куплено:\n"
+        f"{ce(ID_TG, '💬')} ТГ — {user['bought_tg']} шт.\n"
+        f"{ce(ID_MAX, '📲')} MAX — {user['bought_max']} шт."
     )
 
 
