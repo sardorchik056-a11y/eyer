@@ -30,6 +30,9 @@ CRYPTOBOT_TOKEN = os.getenv("CRYPTOBOT_TOKEN", "582363:AALEf7JOugnrQyrkMHzH5UrO7
 CRYPTO_API = "https://pay.crypt.bot/api"
 XROCKET_TOKEN = os.getenv("XROCKET_TOKEN", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBJZCI6IjMwMDgzMiIsImp0aSI6ImFwcDozMDA4MzI6NjY1NzBkYzktMzk4Ny00MWM5LWE1MjAtMzljNTk5ZWUxNjAzIiwiaWF0IjoxNzkwOTUwMzI3fQ.40uVUkYIFEep0eCAewabSQJs7C-XufroQUyzX5UVItc")
 XROCKET_API = os.getenv("XROCKET_API", "https://pay.api.xrocket.exchange")  # тестнет: https://pay.api.testnet.xrocket.exchange
+CRYPTOBOT_TOKEN_2 = os.getenv("CRYPTOBOT_TOKEN_2", "582363:AALEf7JOugnrQyrkMHzH5UrO7pdOjjYnTQy")
+XROCKET_TOKEN_2 = os.getenv("XROCKET_TOKEN_2", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBJZCI6IjMwMDgzMiIsImp0aSI6ImFwcDozMDA4MzI6NjY1NzBkYzktMzk4Ny00MWM5LWE1MjAtMzljNTk5ZWUxNjAzIiwiaWF0IjoxNzkwOTUwMzI3fQ.40uVUkYIFEep0eCAewabSQJs7C-XufroQUyzX5UVItc")
+SPLIT_FROM = 40
 ADMIN_ID = 8118184388
 DB_PATH = "bot.db"
 TITLE = "DASFFING"
@@ -267,6 +270,11 @@ async def init_db() -> None:
             "invoice_id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, amount REAL NOT NULL, "
             "status TEXT NOT NULL DEFAULT 'pending', created_at TEXT DEFAULT CURRENT_TIMESTAMP)"
         )
+        for table in ("invoices", "xr_invoices"):
+            async with db.execute(f"PRAGMA table_info({table})") as cur:
+                cols = {row[1] for row in await cur.fetchall()}
+            if "tier" not in cols:
+                await db.execute(f"ALTER TABLE {table} ADD COLUMN tier INTEGER NOT NULL DEFAULT 0")
         await db.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
         await db.execute("INSERT OR IGNORE INTO stock (platform, qty) VALUES ('tg', 472), ('max', 1488)")
         await db.commit()
@@ -945,10 +953,32 @@ def not_configured(token: str) -> bool:
 
 
 # ---------- CryptoBot ----------
-async def crypto_api(method: str, post: bool = False, **params):
-    if not_configured(CRYPTOBOT_TOKEN):
+def cb_token(tier: int = 0) -> str:
+    if tier == 1 and not not_configured(CRYPTOBOT_TOKEN_2):
+        return CRYPTOBOT_TOKEN_2
+    return CRYPTOBOT_TOKEN
+
+
+def xr_token(tier: int = 0) -> str:
+    if tier == 1 and not not_configured(XROCKET_TOKEN_2):
+        return XROCKET_TOKEN_2
+    return XROCKET_TOKEN
+
+
+async def invoice_tiers(table: str, ids: list) -> dict:
+    if not ids:
+        return {}
+    marks = ",".join("?" * len(ids))
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(f"SELECT invoice_id, tier FROM {table} WHERE invoice_id IN ({marks})", ids) as cur:
+            return {r[0]: r[1] for r in await cur.fetchall()}
+
+
+async def crypto_api(method: str, post: bool = False, _tk: str | None = None, **params):
+    token = _tk or CRYPTOBOT_TOKEN
+    if not_configured(token):
         raise RuntimeError("CRYPTOBOT_TOKEN не задан")
-    headers = {"Crypto-Pay-API-Token": CRYPTOBOT_TOKEN}
+    headers = {"Crypto-Pay-API-Token": token}
     timeout = aiohttp.ClientTimeout(total=15)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         kwargs = {"json": params} if post else {"params": params}
@@ -960,9 +990,11 @@ async def crypto_api(method: str, post: bool = False, **params):
 
 
 async def create_invoice(user_id: int, amount: float) -> tuple[int, str]:
+    tier = 1 if amount > SPLIT_FROM and not not_configured(CRYPTOBOT_TOKEN_2) else 0
     res = await crypto_api(
         "createInvoice",
         post=True,
+        _tk=cb_token(tier),
         currency_type="fiat",
         fiat="USD",
         amount=f"{amount:.2f}",
@@ -972,8 +1004,8 @@ async def create_invoice(user_id: int, amount: float) -> tuple[int, str]:
     )
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
-            "INSERT INTO invoices (invoice_id, user_id, amount) VALUES (?, ?, ?)",
-            (res["invoice_id"], user_id, amount),
+            "INSERT INTO invoices (invoice_id, user_id, amount, tier) VALUES (?, ?, ?, ?)",
+            (res["invoice_id"], user_id, amount, tier),
         )
         await db.commit()
     return res["invoice_id"], res.get("bot_invoice_url") or res.get("pay_url")
@@ -989,9 +1021,13 @@ async def notify_credited(bot: Bot, user_id: int, amount: float) -> None:
 async def sync_invoices(bot: Bot, ids: list[int]) -> list[int]:
     """Проверяет счета в CryptoBot, зачисляет оплаченные. Возвращает id зачисленных."""
     credited: list[int] = []
-    for i in range(0, len(ids), 50):
-        chunk = ids[i : i + 50]
-        res = await crypto_api("getInvoices", invoice_ids=",".join(map(str, chunk)))
+    tiers = await invoice_tiers("invoices", ids)
+    batches = []
+    for tier in (0, 1):
+        tier_ids = [x for x in ids if tiers.get(x, 0) == tier]
+        batches += [(tier, tier_ids[i : i + 50]) for i in range(0, len(tier_ids), 50)]
+    for tier, chunk in batches:
+        res = await crypto_api("getInvoices", _tk=cb_token(tier), invoice_ids=",".join(map(str, chunk)))
         items = res["items"] if isinstance(res, dict) else res
         for inv in items:
             status = inv.get("status")
@@ -1019,7 +1055,7 @@ async def sync_invoices(bot: Bot, ids: list[int]) -> list[int]:
 async def invoice_poller(bot: Bot) -> None:
     while True:
         await asyncio.sleep(20)
-        if not_configured(CRYPTOBOT_TOKEN):
+        if not_configured(CRYPTOBOT_TOKEN) and not_configured(CRYPTOBOT_TOKEN_2):
             continue
         try:
             async with aiosqlite.connect(DB_PATH) as db:
@@ -1038,10 +1074,13 @@ class XRocketError(Exception):
         self.status = status
 
 
-async def xrocket_api(method: str, path: str, *, body: dict | None = None, params: dict | None = None):
-    if not_configured(XROCKET_TOKEN):
+async def xrocket_api(
+    method: str, path: str, *, body: dict | None = None, params: dict | None = None, token: str | None = None
+):
+    token = token or XROCKET_TOKEN
+    if not_configured(token):
         raise RuntimeError("XROCKET_TOKEN не задан")
-    headers = {"Authorization": f"Bearer {XROCKET_TOKEN}", "Accept": "application/json"}
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
     timeout = aiohttp.ClientTimeout(total=15)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.request(method, f"{XROCKET_API}{path}", headers=headers, json=body, params=params) as r:
@@ -1057,9 +1096,11 @@ async def xrocket_api(method: str, path: str, *, body: dict | None = None, param
 
 async def create_xr_invoice(user_id: int, amount: float) -> tuple[str, str]:
     # счёт выставляется в USDT (1 USDT ≈ 1 USD), на баланс зачисляется та же сумма в $
+    tier = 1 if amount > SPLIT_FROM and not not_configured(XROCKET_TOKEN_2) else 0
     res = await xrocket_api(
         "POST",
         "/api/v1/invoices",
+        token=xr_token(tier),
         body={
             "priceCurrency": "USDT",
             "priceAmount": f"{amount:.2f}",
@@ -1074,8 +1115,8 @@ async def create_xr_invoice(user_id: int, amount: float) -> tuple[str, str]:
         raise RuntimeError(f"xRocket: нет ссылки на оплату: {res}")
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
-            "INSERT INTO xr_invoices (invoice_id, user_id, amount) VALUES (?, ?, ?)",
-            (invoice_id, user_id, amount),
+            "INSERT INTO xr_invoices (invoice_id, user_id, amount, tier) VALUES (?, ?, ?, ?)",
+            (invoice_id, user_id, amount, tier),
         )
         await db.commit()
     return invoice_id, link
@@ -1084,9 +1125,12 @@ async def create_xr_invoice(user_id: int, amount: float) -> tuple[str, str]:
 async def sync_xr_invoices(bot: Bot, ids: list[str]) -> list[str]:
     """Проверяет счета xRocket по одному (лимит API: 20 запросов/мин на метод)."""
     credited: list[str] = []
+    tiers = await invoice_tiers("xr_invoices", ids)
     for invoice_id in ids:
         try:
-            inv = await xrocket_api("GET", "/api/v1/invoice", params={"invoiceId": invoice_id})
+            inv = await xrocket_api(
+                "GET", "/api/v1/invoice", params={"invoiceId": invoice_id}, token=xr_token(tiers.get(invoice_id, 0))
+            )
         except XRocketError as exc:
             if exc.status == 429:
                 break  # упёрлись в лимит — продолжим на следующем цикле
@@ -1124,7 +1168,7 @@ async def sync_xr_invoices(bot: Bot, ids: list[str]) -> list[str]:
 async def xrocket_poller(bot: Bot) -> None:
     while True:
         await asyncio.sleep(30)
-        if not_configured(XROCKET_TOKEN):
+        if not_configured(XROCKET_TOKEN) and not_configured(XROCKET_TOKEN_2):
             continue
         try:
             async with aiosqlite.connect(DB_PATH) as db:
