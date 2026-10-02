@@ -1,19 +1,22 @@
 import asyncio
 import html
 import logging
+from datetime import datetime
 
 import aiosqlite
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramAPIError
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandObject, CommandStart
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 BOT_TOKEN = "8712603440:AAGc7SV7cAuHYVYZbVv0dSpxUKtmKlDehqM"
 ADMIN_ID = 8118184388
 DB_PATH = "bot.db"
 TITLE = "DASFFING"
+REF_PERCENT = 5
+DIVIDER = "━━━━━━━━━━━━━━━━━━━━"
 
 ID_SUPPORT = "5391112412445288650"
 ID_DENIED = "5210952531676504517"
@@ -26,6 +29,16 @@ ID_BOX = "5258134813302332906"
 ID_TG = "5285350148451344065"
 ID_MAX = "5449407131675558756"
 ID_BUY = "5440841102871517055"
+
+ID_BADGE = ""
+ID_USERNAME = ""
+ID_GIFT = ""
+ID_USERS = ""
+ID_LINK = ""
+ID_PIN = ""
+ID_CALENDAR = ""
+ID_PROMO = ""
+ID_BACK = ""
 
 ID_BTN_TOPUP = "5258204546391351475"
 ID_BTN_PROFILE = "5258011929993026890"
@@ -60,6 +73,10 @@ TEXT_REJECTED = f"{E_DENIED} <b>ЗАЯВКА ОТКЛОНЕНА</b>\n\n{E_SUPPOR
 router = Router()
 
 
+def btn(text: str, data: str, icon: str = "") -> InlineKeyboardButton:
+    return InlineKeyboardButton(text=text, callback_data=data, icon_custom_emoji_id=icon or None)
+
+
 def apply_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -87,9 +104,6 @@ def decision_kb(user_id: int) -> InlineKeyboardMarkup:
 
 
 def menu_kb() -> InlineKeyboardMarkup:
-    def btn(text: str, data: str, icon: str) -> InlineKeyboardButton:
-        return InlineKeyboardButton(text=text, callback_data=data, icon_custom_emoji_id=icon or None)
-
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [btn("Пополнить", "topup", ID_BTN_TOPUP), btn("Профиль", "profile", ID_BTN_PROFILE)],
@@ -97,6 +111,28 @@ def menu_kb() -> InlineKeyboardMarkup:
             [btn("Инфо", "info", ID_BTN_INFO)],
         ]
     )
+
+
+def profile_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [btn("Пополнить", "topup", ID_BTN_TOPUP)],
+            [btn("Реф-ссылка", "reflink", ID_GIFT)],
+            [btn("Мои рефералы", "refs", ID_USERS)],
+            [btn("Промокод", "promo", ID_PROMO)],
+            [btn("Назад", "menu", ID_BACK)],
+        ]
+    )
+
+
+def back_kb(data: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[[btn("Назад", data, ID_BACK)]])
+
+
+def fmt_date(value: str | None) -> str:
+    if not value:
+        return "—"
+    return datetime.strptime(value[:10], "%Y-%m-%d").strftime("%d.%m.%Y")
 
 
 def menu_text(user: aiosqlite.Row, stock: dict) -> str:
@@ -113,6 +149,29 @@ def menu_text(user: aiosqlite.Row, stock: dict) -> str:
     )
 
 
+def profile_text(user: aiosqlite.Row, username: str | None, ref_count: int, link: str) -> str:
+    shown_username = f"@{html.escape(username)}" if username else "не указан"
+    return (
+        f"{ce(ID_USER, '👤')} Профиль\n\n"
+        f"{ce(ID_BADGE, '🆔')} ID: {user['user_id']}\n"
+        f"{ce(ID_USERNAME, '📛')} Username: {shown_username}\n"
+        f"{ce(ID_WALLET, '💰')} Баланс: {user['balance']:g} $\n\n"
+        f"{ce(ID_BOX, '📦')} Куплено всего:\n"
+        f"{ce(ID_TG, '💬')} Telegram: {user['bought_tg']} шт.\n"
+        f"{ce(ID_MAX, '📲')} MAX: {user['bought_max']} шт.\n"
+        f"{ce(ID_WALLET, '💰')} Потрачено: {user['spent']:g} $\n\n"
+        f"{DIVIDER}\n"
+        f"{ce(ID_GIFT, '🎁')} Реферальная система\n"
+        f"{DIVIDER}\n"
+        f"{ce(ID_USERS, '👥')} Приглашено: {ref_count} чел.\n"
+        f"{ce(ID_WALLET, '💰')} Заработано: {user['ref_earned']:g} $\n\n"
+        f"{ce(ID_LINK, '🔗')} Ваша ссылка:\n"
+        f"{link}\n\n"
+        f"{ce(ID_PIN, '📌')} За каждое пополнение : {REF_PERCENT}%\n\n"
+        f"{ce(ID_CALENDAR, '📅')} Регистрация: {fmt_date(user['created_at'])}"
+    )
+
+
 async def init_db() -> None:
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
@@ -124,8 +183,20 @@ async def init_db() -> None:
             "balance REAL NOT NULL DEFAULT 0, "
             "bought_tg INTEGER NOT NULL DEFAULT 0, "
             "bought_max INTEGER NOT NULL DEFAULT 0, "
+            "spent REAL NOT NULL DEFAULT 0, "
+            "referrer_id INTEGER, "
+            "ref_earned REAL NOT NULL DEFAULT 0, "
             "created_at TEXT DEFAULT CURRENT_TIMESTAMP)"
         )
+        async with db.execute("PRAGMA table_info(users)") as cur:
+            columns = {row[1] for row in await cur.fetchall()}
+        for name, ddl in (
+            ("spent", "REAL NOT NULL DEFAULT 0"),
+            ("referrer_id", "INTEGER"),
+            ("ref_earned", "REAL NOT NULL DEFAULT 0"),
+        ):
+            if name not in columns:
+                await db.execute(f"ALTER TABLE users ADD COLUMN {name} {ddl}")
         await db.execute(
             "CREATE TABLE IF NOT EXISTS stock (platform TEXT PRIMARY KEY, qty INTEGER NOT NULL DEFAULT 0)"
         )
@@ -146,6 +217,25 @@ async def get_stock() -> dict:
             return {p: q for p, q in await cur.fetchall()}
 
 
+async def ensure_user(user_id: int, ref_id: int | None) -> None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT 1 FROM users WHERE user_id = ?", (user_id,)) as cur:
+            if await cur.fetchone():
+                return
+        referrer = None
+        if ref_id and ref_id != user_id:
+            async with db.execute(
+                "SELECT 1 FROM users WHERE user_id = ? AND status = 'approved'", (ref_id,)
+            ) as cur:
+                if await cur.fetchone():
+                    referrer = ref_id
+        await db.execute(
+            "INSERT INTO users (user_id, status, referrer_id) VALUES (?, 'new', ?)",
+            (user_id, referrer),
+        )
+        await db.commit()
+
+
 async def create_application(user_id: int, username: str | None, full_name: str) -> None:
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
@@ -163,19 +253,72 @@ async def set_status(user_id: int, status: str) -> None:
         await db.commit()
 
 
+async def count_refs(user_id: int) -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT COUNT(*) FROM users WHERE referrer_id = ? AND status = 'approved'", (user_id,)
+        ) as cur:
+            row = await cur.fetchone()
+            return row[0]
+
+
+async def get_referrals(user_id: int, limit: int = 30) -> list:
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT user_id, username, full_name, created_at FROM users "
+            "WHERE referrer_id = ? AND status = 'approved' ORDER BY created_at DESC LIMIT ?",
+            (user_id, limit),
+        ) as cur:
+            return await cur.fetchall()
+
+
+async def add_balance(user_id: int, amount: float) -> None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (amount, user_id))
+        async with db.execute("SELECT referrer_id FROM users WHERE user_id = ?", (user_id,)) as cur:
+            row = await cur.fetchone()
+        if row and row[0]:
+            bonus = round(amount * REF_PERCENT / 100, 2)
+            await db.execute(
+                "UPDATE users SET balance = balance + ?, ref_earned = ref_earned + ? WHERE user_id = ?",
+                (bonus, bonus, row[0]),
+            )
+        await db.commit()
+
+
 async def send_menu(bot: Bot, chat_id: int, user_id: int) -> None:
     user = await get_user(user_id)
     stock = await get_stock()
     await bot.send_message(chat_id, menu_text(user, stock), reply_markup=menu_kb())
 
 
+async def require_approved(call: CallbackQuery) -> aiosqlite.Row | None:
+    user = await get_user(call.from_user.id)
+    if not user or user["status"] != "approved":
+        await call.answer("Доступ ограничен", show_alert=True)
+        return None
+    return user
+
+
+async def ref_link(bot: Bot, user_id: int) -> str:
+    me = await bot.me()
+    return f"https://t.me/{me.username}?start=ref_{user_id}"
+
+
 @router.message(CommandStart())
-async def cmd_start(message: Message, bot: Bot) -> None:
+async def cmd_start(message: Message, command: CommandObject, bot: Bot) -> None:
+    ref_id = None
+    if command.args and command.args.startswith("ref_") and command.args[4:].isdigit():
+        ref_id = int(command.args[4:])
+
+    await ensure_user(message.from_user.id, ref_id)
     user = await get_user(message.from_user.id)
-    if user and user["status"] == "approved":
+
+    if user["status"] == "approved":
         await send_menu(bot, message.chat.id, message.from_user.id)
         return
-    if user and user["status"] == "pending":
+    if user["status"] == "pending":
         await message.answer(TEXT_ALREADY)
         return
     await message.answer(TEXT_START, reply_markup=apply_kb())
@@ -247,15 +390,79 @@ async def on_decision(call: CallbackQuery, bot: Bot) -> None:
         logging.exception("Не удалось уведомить пользователя %s", user_id)
 
 
-@router.callback_query(F.data.in_({"topup", "profile", "stats", "catalog", "info"}))
-async def on_menu_button(call: CallbackQuery) -> None:
+@router.callback_query(F.data == "menu")
+async def on_menu(call: CallbackQuery) -> None:
+    user = await require_approved(call)
+    if not user:
+        return
+    stock = await get_stock()
+    await call.answer()
+    await call.message.edit_text(menu_text(user, stock), reply_markup=menu_kb())
+
+
+@router.callback_query(F.data == "profile")
+async def on_profile(call: CallbackQuery, bot: Bot) -> None:
+    user = await require_approved(call)
+    if not user:
+        return
+    link = await ref_link(bot, user["user_id"])
+    refs = await count_refs(user["user_id"])
+    await call.answer()
+    await call.message.edit_text(
+        profile_text(user, call.from_user.username, refs, link),
+        reply_markup=profile_kb(),
+    )
+
+
+@router.callback_query(F.data == "reflink")
+async def on_reflink(call: CallbackQuery, bot: Bot) -> None:
+    user = await require_approved(call)
+    if not user:
+        return
+    link = await ref_link(bot, user["user_id"])
+    text = (
+        f"{ce(ID_GIFT, '🎁')} <b>Реф-ссылка</b>\n\n"
+        f"{ce(ID_LINK, '🔗')} Ваша ссылка:\n"
+        f"<code>{link}</code>\n\n"
+        f"{ce(ID_PIN, '📌')} За каждое пополнение : {REF_PERCENT}%"
+    )
+    await call.answer()
+    await call.message.edit_text(text, reply_markup=back_kb("profile"))
+
+
+@router.callback_query(F.data == "refs")
+async def on_refs(call: CallbackQuery) -> None:
+    user = await require_approved(call)
+    if not user:
+        return
+    total = await count_refs(user["user_id"])
+    rows = await get_referrals(user["user_id"])
+
+    lines = [f"{ce(ID_USERS, '👥')} <b>Мои рефералы:</b> {total}\n"]
+    if not rows:
+        lines.append("Пока никого нет.")
+    for i, row in enumerate(rows, 1):
+        name = f"@{row['username']}" if row["username"] else (row["full_name"] or str(row["user_id"]))
+        lines.append(f"{i}. {html.escape(name)} — {fmt_date(row['created_at'])}")
+    if total > len(rows):
+        lines.append(f"\nи ещё {total - len(rows)}")
+
+    await call.answer()
+    await call.message.edit_text("\n".join(lines), reply_markup=back_kb("profile"))
+
+
+@router.callback_query(F.data.in_({"topup", "promo", "stats", "catalog", "info"}))
+async def on_stub(call: CallbackQuery) -> None:
     await call.answer("Раздел в разработке", show_alert=True)
 
 
 async def main() -> None:
     logging.basicConfig(level=logging.INFO)
     await init_db()
-    bot = Bot(BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    bot = Bot(
+        BOT_TOKEN,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML, link_preview_is_disabled=True),
+    )
     dp = Dispatcher()
     dp.include_router(router)
     await bot.delete_webhook(drop_pending_updates=True)
