@@ -25,7 +25,7 @@ from aiogram.types import (
     Message,
 )
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8651720497:AAG_fEJKDwIl-SeTPFi_TSRPVnaDGtv96bw")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8651720497:AAG_fEJKDwIl-SeTPFi_TSRPVnaDGtv96bw бот")
 CRYPTOBOT_TOKEN = os.getenv("CRYPTOBOT_TOKEN", "635289:AA2vNvL7JX6OinhAt7kHHv1jwMQNtUOnW4u")
 CRYPTO_API = "https://pay.crypt.bot/api"
 XROCKET_TOKEN = os.getenv("XROCKET_TOKEN", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBJZCI6IjMwMzM5NiIsImp0aSI6ImFwcDozMDMzOTY6MmQ2MjI2M2YtN2I3MS00ZjVhLTk2ODctZTYyMzdhYjZkMDM3IiwiaWF0IjoxNzkwOTUyNzI1fQ.30CJHFWRmgSJ1PwMkCflRAWLDeNFsWXUO5GAl_P_8Mw")
@@ -33,7 +33,7 @@ XROCKET_API = os.getenv("XROCKET_API", "https://pay.api.xrocket.exchange")  # т
 CRYPTOBOT_TOKEN_2 = os.getenv("CRYPTOBOT_TOKEN_2", "582363:AALEf7JOugnrQyrkMHzH5UrO7pdOjjYnTQy")
 XROCKET_TOKEN_2 = os.getenv("XROCKET_TOKEN_2", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBJZCI6IjMwMDgzMiIsImp0aSI6ImFwcDozMDA4MzI6NjY1NzBkYzktMzk4Ny00MWM5LWE1MjAtMzljNTk5ZWUxNjAzIiwiaWF0IjoxNzkwOTUwMzI3fQ.40uVUkYIFEep0eCAewabSQJs7C-XufroQUyzX5UVItc")
 SPLIT_FROM = 40
-ADMIN_ID = 8854740379  
+ADMIN_ID = 8854740379
 DB_PATH = "bot.db"
 TITLE = "DASFFING"
 REF_PERCENT = 5
@@ -73,7 +73,7 @@ ID_NOTE = "5334544901428229844"    # ℹ️
 # ---- магазин ----
 CUR = "$"
 DEFAULT_MIN = 10
-MIN_TOPUP = 1
+MIN_TOPUP = 30
 MAX_TOPUP = 1000
 SUPPORT_USERNAME = "DqASAQ"
 PRODUCTS = {
@@ -81,7 +81,7 @@ PRODUCTS = {
     "max": {"name": "MAX нерег", "short": "MAX", "icon": ID_MAX, "fb": "🟣", "price": 0.50, "min": DEFAULT_MIN, "col": "bought_max"},
 }
 QTY_PRESETS = (10, 25, 50, 100)
-TOPUP_PRESETS = (5, 10, 25, 50)
+TOPUP_PRESETS = (30, 50, 100, 200)
 BUSY: set[int] = set()
 
 ID_BTN_TOPUP = "5258204546391351475"
